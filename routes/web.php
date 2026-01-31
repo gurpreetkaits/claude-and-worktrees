@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FileSystemController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TerminalController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\WorktreeController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +38,8 @@ Route::get('/todos/{todo}', fn ($todo) => redirect()->route('dashboard.todo', $t
 Route::patch('/todos/{todo}', [TodoController::class, 'update'])->name('todos.update');
 Route::delete('/todos/{todo}', [TodoController::class, 'destroy'])->name('todos.destroy');
 Route::post('/todos/{todo}/archive', [TodoController::class, 'archive'])->name('todos.archive');
+Route::post('/todos/{todo}/duplicate', [TodoController::class, 'duplicate'])->name('todos.duplicate');
+Route::post('/todos/reorder', [TodoController::class, 'reorder'])->name('todos.reorder');
 
 // Messages
 Route::post('/todos/{todo}/messages', [MessageController::class, 'store'])->name('messages.store');
@@ -52,3 +55,6 @@ Route::get('/sessions/{session}/status', [ClaudeStreamController::class, 'status
 // Settings
 Route::get('/api/settings', [SettingsController::class, 'show'])->name('settings.show');
 Route::patch('/api/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+// Terminal
+Route::post('/api/terminal/execute', [TerminalController::class, 'execute'])->name('terminal.execute');

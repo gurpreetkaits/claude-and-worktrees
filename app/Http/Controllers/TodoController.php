@@ -118,4 +118,39 @@ class TodoController extends Controller
 
         return back();
     }
+
+    public function duplicate(Request $request, Todo $todo)
+    {
+        // Create a copy of the todo with "(Copy)" appended to the title
+        $newTodo = $todo->replicate();
+        $newTodo->title = $todo->title . ' (Copy)';
+        $newTodo->status = 'pending';
+        $newTodo->is_archived = false;
+        $newTodo->created_at = now();
+        $newTodo->updated_at = now();
+        $newTodo->save();
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'id' => $newTodo->id,
+                'todo' => $newTodo,
+            ]);
+        }
+
+        return back();
+    }
+
+    public function reorder(Request $request)
+    {
+        $validated = $request->validate([
+            'orderedIds' => 'required|array',
+            'orderedIds.*' => 'integer|exists:todos,id',
+        ]);
+
+        foreach ($validated['orderedIds'] as $position => $id) {
+            Todo::where('id', $id)->update(['position' => $position]);
+        }
+
+        return response()->json(['success' => true]);
+    }
 }

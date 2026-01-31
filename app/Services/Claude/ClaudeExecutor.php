@@ -62,13 +62,15 @@ class ClaudeExecutor
      * @param string $prompt User prompt to send
      * @param ClaudeSession $session Session to track
      * @param string $model Claude model to use
+     * @param array $images Array of images with 'data' (base64) and 'mediaType' keys
      * @return Generator Yields normalized messages
      */
     public function execute(
         string $workingDirectory,
         string $prompt,
         ClaudeSession $session,
-        string $model = 'sonnet'
+        string $model = 'sonnet',
+        array $images = []
     ): Generator {
         $command = $this->buildCommand($model);
         $this->process = new Process($command, $workingDirectory);
@@ -81,7 +83,7 @@ class ClaudeExecutor
         $this->protocol = new Protocol($this->process);
         $pipes = $this->process->getInput();
 
-        yield from $this->runWithBidirectionalIO($workingDirectory, $prompt, $session, $model);
+        yield from $this->runWithBidirectionalIO($workingDirectory, $prompt, $session, $model, $images);
     }
 
     /**
@@ -91,7 +93,8 @@ class ClaudeExecutor
         string $workingDirectory,
         string $prompt,
         ClaudeSession $session,
-        string $model
+        string $model,
+        array $images = []
     ): Generator {
         $command = implode(' ', $this->buildCommand($model));
 
@@ -138,11 +141,14 @@ class ClaudeExecutor
         fwrite($stdin, $permissionModeRequest);
         fflush($stdin);
 
+        // Build message content - use array format if images are present
+        $messageContent = $this->buildMessageContent($prompt, $images);
+
         $userMessage = json_encode([
             'type' => 'user',
             'message' => [
                 'role' => 'user',
-                'content' => $prompt,
+                'content' => $messageContent,
             ],
         ]) . "\n";
         fwrite($stdin, $userMessage);
@@ -523,6 +529,44 @@ class ClaudeExecutor
         $env['NPM_CONFIG_LOGLEVEL'] = 'error';
 
         return $env;
+    }
+
+    /**
+     * Build message content, including images if present.
+     *
+     * @param string $prompt The text prompt
+     * @param array $images Array of images with 'data' (base64) and 'mediaType' keys
+     * @return string|array String if no images, array of content blocks if images present
+     */
+    private function buildMessageContent(string $prompt, array $images): string|array
+    {
+        if (empty($images)) {
+            return $prompt;
+        }
+
+        // Build content array with images first, then text
+        $content = [];
+
+        foreach ($images as $image) {
+            $content[] = [
+                'type' => 'image',
+                'source' => [
+                    'type' => 'base64',
+                    'media_type' => $image['mediaType'],
+                    'data' => $image['data'],
+                ],
+            ];
+        }
+
+        // Add text content
+        if (!empty($prompt)) {
+            $content[] = [
+                'type' => 'text',
+                'text' => $prompt,
+            ];
+        }
+
+        return $content;
     }
 
     /**

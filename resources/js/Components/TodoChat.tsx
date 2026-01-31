@@ -1,9 +1,28 @@
-import { useRef, useEffect, FormEvent, useState, useCallback } from 'react';
+import { useRef, useEffect, FormEvent, useState, useCallback, ClipboardEvent } from 'react';
 import { Todo, Message } from '@/types';
-import { SendIcon, XIcon, FolderIcon, GitBranchIcon, PlayIcon, StopIcon, RerunIcon } from './ui/Icons';
+import { SendIcon, XIcon, FolderIcon, GitBranchIcon, PlayIcon, StopIcon, RerunIcon, CheckIcon, AlertIcon } from './ui/Icons';
 import { useTodoSession } from '@/hooks/useConcurrentSessions';
 import { StreamingMessage } from './StreamingMessage';
 import { Markdown } from './ui/Markdown';
+
+// Image attachment type
+export interface ImageAttachment {
+    id: string;
+    data: string; // base64 data (without prefix)
+    mediaType: string; // e.g., 'image/png', 'image/jpeg'
+    preview: string; // data URL for preview
+}
+
+// Status indicator component for commands/hooks
+function StatusBadge({ status }: { status: 'running' | 'completed' | 'failed' }) {
+    if (status === 'running') {
+        return <span className="w-3 h-3 border-2 border-brand/30 border-t-brand rounded-full animate-spin" />;
+    }
+    if (status === 'completed') {
+        return <CheckIcon className="w-3.5 h-3.5 text-success" />;
+    }
+    return <AlertIcon className="w-3.5 h-3.5 text-error" />;
+}
 
 interface TodoChatProps {
     todo: Todo;
@@ -14,6 +33,7 @@ interface TodoChatProps {
 export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
     // Input state synced with per-task draft storage
     const [input, setInputLocal] = useState('');
+    const [images, setImages] = useState<ImageAttachment[]>([]);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -33,6 +53,9 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
         lastCompletedMessage,
         completionCount,
         blockedCommands,
+        preCommand,
+        postCommand,
+        hooks,
         sendMessage,
         queueMessage,
         clearQueue,
@@ -164,18 +187,24 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
 
     const handleSubmit = useCallback(async (e: FormEvent) => {
         e.preventDefault();
-        if (!input.trim()) return;
+        if (!input.trim() && images.length === 0) return;
 
         const userMessage = input.trim();
+        const attachedImages = images.map(img => ({
+            data: img.data,
+            mediaType: img.mediaType,
+        }));
+
         setInput('');
+        setImages([]);
         setUserScrolled(false);
 
         if (isStreaming) {
-            queueMessage(userMessage);
+            queueMessage(userMessage, attachedImages.length > 0 ? attachedImages : undefined);
         } else {
-            sendMessage(userMessage);
+            sendMessage(userMessage, attachedImages.length > 0 ? attachedImages : undefined);
         }
-    }, [input, isStreaming, queueMessage, sendMessage, setInput]);
+    }, [input, images, isStreaming, queueMessage, sendMessage, setInput]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -184,8 +213,53 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
         }
     }, [handleSubmit]);
 
+    // Handle paste event for images
+    const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (!file) continue;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const dataUrl = event.target?.result as string;
+                    if (!dataUrl) return;
+
+                    // Extract base64 data and media type
+                    const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (!matches) return;
+
+                    const [, mediaType, data] = matches;
+                    const newImage: ImageAttachment = {
+                        id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                        data,
+                        mediaType,
+                        preview: dataUrl,
+                    };
+
+                    setImages(prev => [...prev, newImage]);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+    }, []);
+
+    // Remove an attached image
+    const removeImage = useCallback((imageId: string) => {
+        setImages(prev => prev.filter(img => img.id !== imageId));
+    }, []);
+
+    // Clear images when todo changes
+    useEffect(() => {
+        setImages([]);
+    }, [todo.id]);
+
     // Determine what the main action button should do
-    const hasInput = input.trim().length > 0;
+    const hasInput = input.trim().length > 0 || images.length > 0;
     const canStart = messages.length === 0 && todo.context && !isStreaming;
 
     return (
@@ -210,16 +284,38 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                             </div>
                         )}
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                        {/* Stats */}
-                        {costUsd !== null && (
-                            <span className="text-xs text-text-low">
-                                ${costUsd.toFixed(4)}
-                            </span>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                        {/* Session stats badges */}
+                        {(costUsd !== null || durationMs !== null || toolUses.length > 0) && (
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-bg-panel rounded-md border border-border">
+                                {costUsd !== null && (
+                                    <span className="text-xs text-text-normal font-medium" title="API Cost">
+                                        ${costUsd.toFixed(4)}
+                                    </span>
+                                )}
+                                {costUsd !== null && durationMs !== null && (
+                                    <span className="text-text-low">·</span>
+                                )}
+                                {durationMs !== null && (
+                                    <span className="text-xs text-text-low" title="Duration">
+                                        {(durationMs / 1000).toFixed(1)}s
+                                    </span>
+                                )}
+                                {toolUses.length > 0 && (
+                                    <>
+                                        <span className="text-text-low">·</span>
+                                        <span className="text-xs text-text-low" title="Tool calls">
+                                            {toolUses.length} tools
+                                        </span>
+                                    </>
+                                )}
+                            </div>
                         )}
-                        {durationMs !== null && (
-                            <span className="text-xs text-text-low">
-                                {(durationMs / 1000).toFixed(1)}s
+
+                        {/* Model badge */}
+                        {todo.model && (
+                            <span className="text-xs px-2 py-1 bg-brand/10 text-brand rounded-md font-medium capitalize">
+                                {todo.model}
                             </span>
                         )}
 
@@ -249,6 +345,69 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                     </div>
                 </div>
             </div>
+
+            {/* Command/Hook execution panel */}
+            {(preCommand || postCommand || hooks.length > 0) && (
+                <div className="flex-shrink-0 bg-bg-secondary border-b border-border px-4 py-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        {/* Pre-command status */}
+                        {preCommand && (
+                            <div
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded border ${
+                                    preCommand.status === 'running'
+                                        ? 'bg-brand/10 border-brand/20'
+                                        : preCommand.status === 'completed'
+                                        ? 'bg-success/10 border-success/20'
+                                        : 'bg-error/10 border-error/20'
+                                }`}
+                                title={preCommand.error || preCommand.output || preCommand.command}
+                            >
+                                <StatusBadge status={preCommand.status} />
+                                <span className="text-text-normal">Pre-command</span>
+                                {preCommand.status === 'running' && (
+                                    <span className="text-text-low truncate max-w-[150px]">{preCommand.command}</span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Post-command status */}
+                        {postCommand && (
+                            <div
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded border ${
+                                    postCommand.status === 'running'
+                                        ? 'bg-brand/10 border-brand/20'
+                                        : postCommand.status === 'completed'
+                                        ? 'bg-success/10 border-success/20'
+                                        : 'bg-error/10 border-error/20'
+                                }`}
+                                title={postCommand.error || postCommand.output || postCommand.command}
+                            >
+                                <StatusBadge status={postCommand.status} />
+                                <span className="text-text-normal">Post-command</span>
+                                {postCommand.status === 'running' && (
+                                    <span className="text-text-low truncate max-w-[150px]">{postCommand.command}</span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Hook execution status */}
+                        {hooks.map((hook, index) => (
+                            <div
+                                key={index}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded border ${
+                                    hook.status === 'completed'
+                                        ? 'bg-success/10 border-success/20'
+                                        : 'bg-error/10 border-error/20'
+                                }`}
+                                title={hook.error || hook.output || hook.command}
+                            >
+                                <StatusBadge status={hook.status} />
+                                <span className="text-text-normal capitalize">{hook.event.replace('_', ' ')}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Messages area - scrollable */}
             <div
@@ -365,9 +524,14 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                         {queuedMessages.map((msg, index) => (
                             <div key={index} className="flex items-center gap-2 px-3 py-2 bg-brand/10 border border-brand/20 rounded-lg text-sm">
                                 <span className="text-brand font-medium text-xs">{index + 1}.</span>
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 flex items-center gap-2">
+                                    {msg.images && msg.images.length > 0 && (
+                                        <span className="text-brand text-xs">
+                                            [{msg.images.length} image{msg.images.length > 1 ? 's' : ''}]
+                                        </span>
+                                    )}
                                     <span className="text-text-normal truncate">
-                                        {msg.length > 60 ? msg.slice(0, 60) + '...' : msg}
+                                        {msg.content.length > 60 ? msg.content.slice(0, 60) + '...' : msg.content}
                                     </span>
                                 </div>
                                 <button
@@ -385,17 +549,41 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
 
                 {/* Main input with Start/Stop/Send button */}
                 <form onSubmit={handleSubmit} className="relative max-w-4xl mx-auto">
+                    {/* Image previews */}
+                    {images.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2 p-2 bg-bg-secondary rounded-lg border border-border">
+                            {images.map(img => (
+                                <div key={img.id} className="relative group">
+                                    <img
+                                        src={img.preview}
+                                        alt="Attached"
+                                        className="h-16 w-auto rounded border border-border object-cover"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeImage(img.id)}
+                                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-error text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Remove image"
+                                    >
+                                        <XIcon className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     <textarea
                         ref={textareaRef}
                         value={input}
                         onChange={(e) => setInput(e.currentTarget.value)}
                         onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
                         placeholder={
                             isStreaming
                                 ? `Type to queue${queuedMessages.length > 0 ? ' another' : ' a'} follow-up message...`
                                 : messages.length === 0
-                                    ? 'Or type a custom message...'
-                                    : 'Type a follow-up message... (Enter to send)'
+                                    ? 'Or type a custom message... (paste images supported)'
+                                    : 'Type a follow-up message... (Enter to send, paste images supported)'
                         }
                         className="chat-input text-text-high placeholder:text-text-low min-h-[100px] max-h-[300px]"
                         rows={4}

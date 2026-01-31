@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import { Dialog, DialogPanel, Transition, TransitionChild } from '@headlessui/react';
 import { Worktree, ClaudeModel, ClaudeModelsConfig } from '@/types';
 import { WorktreeSelector } from './WorktreeSelector';
-import { XIcon, SparklesIcon, BrainIcon, ShieldIcon, GlobeIcon } from './ui/Icons';
+import { XIcon, SparklesIcon, BrainIcon, ShieldIcon, GlobeIcon, FolderIcon, GitBranchIcon } from './ui/Icons';
 import axios from 'axios';
 
 interface NewTaskDialogProps {
@@ -218,6 +218,22 @@ export function NewTaskDialog({
                                             onCreateWorktree={handleCreateWorktree}
                                             defaultProjectsPath={defaultProjectsPath}
                                         />
+                                        {/* Selected worktree details */}
+                                        {selectedWorktree && (
+                                            <div className="flex items-center gap-4 px-4 py-2 bg-bg-secondary/50 rounded-lg text-xs text-text-low">
+                                                <span className="flex items-center gap-1.5">
+                                                    <FolderIcon className="w-3.5 h-3.5" />
+                                                    {selectedWorktree.name}
+                                                </span>
+                                                <span className="flex items-center gap-1.5">
+                                                    <GitBranchIcon className="w-3.5 h-3.5" />
+                                                    {selectedWorktree.branch || 'main'}
+                                                </span>
+                                                <span className="text-text-low/50 truncate flex-1" title={selectedWorktree.path}>
+                                                    {selectedWorktree.path}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Title */}

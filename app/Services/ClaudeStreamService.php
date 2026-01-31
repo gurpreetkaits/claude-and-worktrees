@@ -14,8 +14,17 @@ class ClaudeStreamService
 {
     private ?ClaudeExecutor $executor = null;
 
+    // Batching configuration
+    private const DB_BATCH_INTERVAL_SECONDS = 2;
+    private const DB_BATCH_SIZE_BYTES = 5000;
+
+    // Batching state
+    private float $lastDbUpdateTime = 0;
+    private int $lastDbUpdateLength = 0;
+
     public function __construct(
-        private ClaudeProcessService $processService
+        private ClaudeProcessService $processService,
+        private HookExecutorService $hookExecutor
     ) {}
 
     /**
@@ -23,9 +32,10 @@ class ClaudeStreamService
      *
      * @param Todo $todo The todo to stream in
      * @param string $content The user's message content
+     * @param array $images Array of images with 'data' (base64) and 'mediaType' keys
      * @return Generator Yields SSE events
      */
-    public function stream(Todo $todo, string $content): Generator
+    public function stream(Todo $todo, string $content, array $images = []): Generator
     {
         \Log::info('[SSE] Starting stream', ['todo_id' => $todo->id, 'content_length' => strlen($content)]);
 
@@ -78,6 +88,12 @@ class ClaudeStreamService
         // Mark todo as running
         $todo->markAsRunning();
 
+        // Execute task_started hooks
+        $startHookResults = $this->hookExecutor->executeHooks('task_started', $todo);
+        foreach ($startHookResults as $result) {
+            yield $this->sseEvent('hook_executed', $result);
+        }
+
         // Create streaming assistant message
         $assistantMessage = $todo->messages()->create([
             'role' => 'assistant',
@@ -95,6 +111,10 @@ class ClaudeStreamService
         $fullContent = '';
         $success = true;
 
+        // Reset batching state for this stream
+        $this->lastDbUpdateTime = microtime(true);
+        $this->lastDbUpdateLength = 0;
+
         // Create executor with auto-approve mode for better UX
         $this->executor = new ClaudeExecutor();
         $this->executor->setPermissionMode('bypass_permissions');
@@ -110,7 +130,7 @@ class ClaudeStreamService
         }
 
         try {
-            foreach ($this->executor->execute($workingDirectory, $processedContent, $session, $todo->model ?? 'sonnet') as $event) {
+            foreach ($this->executor->execute($workingDirectory, $processedContent, $session, $todo->model ?? 'sonnet', $images) as $event) {
                 $sseEvent = $this->processClaudeEvent($event, $assistantMessage, $fullContent);
                 if ($sseEvent !== null) {
                     yield $sseEvent;
@@ -130,6 +150,12 @@ class ClaudeStreamService
             // Only mark as completed if not already marked
             if ($todo->fresh()->status === 'running') {
                 $todo->markAsCompleted();
+
+                // Execute task_completed hooks
+                $completedHookResults = $this->hookExecutor->executeHooks('task_completed', $todo);
+                foreach ($completedHookResults as $result) {
+                    yield $this->sseEvent('hook_executed', $result);
+                }
             }
         } catch (\Throwable $e) {
             $success = false;
@@ -142,6 +168,12 @@ class ClaudeStreamService
             ]);
 
             $todo->markAsFailed();
+
+            // Execute task_failed hooks
+            $failedHookResults = $this->hookExecutor->executeHooks('task_failed', $todo);
+            foreach ($failedHookResults as $result) {
+                yield $this->sseEvent('hook_executed', $result);
+            }
 
             yield $this->sseEvent('error', [
                 'message' => $e->getMessage(),
@@ -251,9 +283,16 @@ class ClaudeStreamService
                     'preview' => substr($text, 0, 50),
                 ]);
 
-                // Update message incrementally (every ~100 chars)
-                if (strlen($fullContent) % 100 < 10) {
+                // Batch DB updates: write every N seconds OR every N bytes (whichever comes first)
+                $now = microtime(true);
+                $timeSinceLastUpdate = $now - $this->lastDbUpdateTime;
+                $bytesSinceLastUpdate = strlen($fullContent) - $this->lastDbUpdateLength;
+
+                if ($timeSinceLastUpdate >= self::DB_BATCH_INTERVAL_SECONDS ||
+                    $bytesSinceLastUpdate >= self::DB_BATCH_SIZE_BYTES) {
                     $message->update(['content' => $fullContent]);
+                    $this->lastDbUpdateTime = $now;
+                    $this->lastDbUpdateLength = strlen($fullContent);
                 }
 
                 return $this->sseEvent('text_delta', [

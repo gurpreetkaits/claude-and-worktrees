@@ -44,6 +44,35 @@ interface BlockedCommand {
     timestamp: number;
 }
 
+interface CommandExecution {
+    command: string;
+    status: 'running' | 'completed' | 'failed';
+    output?: string;
+    error?: string;
+    exitCode?: number;
+}
+
+interface HookExecution {
+    hookId: string | null;
+    event: string;
+    command: string;
+    status: 'running' | 'completed' | 'failed';
+    output?: string;
+    error?: string;
+}
+
+// Image attachment for sending with messages
+export interface MessageImage {
+    data: string; // base64 data
+    mediaType: string; // e.g., 'image/png'
+}
+
+// Queued message with optional images
+interface QueuedMessage {
+    content: string;
+    images?: MessageImage[];
+}
+
 export interface SessionState {
     isStreaming: boolean;
     currentText: string;
@@ -54,12 +83,17 @@ export interface SessionState {
     thinking: string;
     costUsd: number | null;
     durationMs: number | null;
-    queuedMessages: string[];
+    inputTokens: number | null;
+    outputTokens: number | null;
+    queuedMessages: QueuedMessage[];
     lastCompletedMessage: Message | null;
     lastUserMessage: Message | null;
     completionCount: number;
-    draftInput: string; // Persisted input per task
-    blockedCommands: BlockedCommand[]; // Commands blocked for safety
+    draftInput: string;
+    blockedCommands: BlockedCommand[];
+    preCommand: CommandExecution | null;
+    postCommand: CommandExecution | null;
+    hooks: HookExecution[];
 }
 
 const initialSessionState: SessionState = {
@@ -72,12 +106,17 @@ const initialSessionState: SessionState = {
     thinking: '',
     costUsd: null,
     durationMs: null,
+    inputTokens: null,
+    outputTokens: null,
     queuedMessages: [],
     lastCompletedMessage: null,
     lastUserMessage: null,
     completionCount: 0,
     draftInput: '',
     blockedCommands: [],
+    preCommand: null,
+    postCommand: null,
+    hooks: [],
 };
 
 // Listener types
@@ -140,10 +179,10 @@ class ConcurrentSessionManager {
         return () => this.runningListeners.delete(listener);
     }
 
-    async sendMessage(todoId: number, content: string): Promise<void> {
+    async sendMessage(todoId: number, content: string, images?: MessageImage[]): Promise<void> {
         const currentSession = this.getSession(todoId);
         if (currentSession.isStreaming) {
-            this.updateSession(todoId, { queuedMessages: [...currentSession.queuedMessages, content] });
+            this.updateSession(todoId, { queuedMessages: [...currentSession.queuedMessages, { content, images }] });
             return;
         }
 
@@ -157,7 +196,12 @@ class ConcurrentSessionManager {
             thinking: '',
             costUsd: null,
             durationMs: null,
+            inputTokens: null,
+            outputTokens: null,
             blockedCommands: [],
+            preCommand: null,
+            postCommand: null,
+            hooks: [],
         });
 
         const abortController = new AbortController();
@@ -173,7 +217,7 @@ class ConcurrentSessionManager {
                     'Accept': 'text/event-stream',
                     'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
                 },
-                body: JSON.stringify({ message: content }),
+                body: JSON.stringify({ message: content, images: images || [] }),
                 signal: abortController.signal,
             });
 
@@ -237,7 +281,7 @@ class ConcurrentSessionManager {
         if (finalSession.queuedMessages.length > 0) {
             const [nextMessage, ...remainingMessages] = finalSession.queuedMessages;
             this.updateSession(todoId, { queuedMessages: remainingMessages });
-            setTimeout(() => this.sendMessage(todoId, nextMessage), 100);
+            setTimeout(() => this.sendMessage(todoId, nextMessage.content, nextMessage.images), 100);
         }
     }
 
@@ -320,6 +364,61 @@ class ConcurrentSessionManager {
                     }],
                 });
                 break;
+
+            case 'pre_command_start':
+                this.updateSession(todoId, {
+                    preCommand: {
+                        command: data.command as string,
+                        status: 'running',
+                    },
+                });
+                break;
+
+            case 'pre_command_result':
+                this.updateSession(todoId, {
+                    preCommand: {
+                        command: session.preCommand?.command || '',
+                        status: (data.success as boolean) ? 'completed' : 'failed',
+                        output: data.output as string | undefined,
+                        error: data.error as string | undefined,
+                        exitCode: data.exit_code as number | undefined,
+                    },
+                });
+                break;
+
+            case 'post_command_start':
+                this.updateSession(todoId, {
+                    postCommand: {
+                        command: data.command as string,
+                        status: 'running',
+                    },
+                });
+                break;
+
+            case 'post_command_result':
+                this.updateSession(todoId, {
+                    postCommand: {
+                        command: session.postCommand?.command || '',
+                        status: (data.success as boolean) ? 'completed' : 'failed',
+                        output: data.output as string | undefined,
+                        error: data.error as string | undefined,
+                        exitCode: data.exit_code as number | undefined,
+                    },
+                });
+                break;
+
+            case 'hook_executed':
+                this.updateSession(todoId, {
+                    hooks: [...session.hooks, {
+                        hookId: data.hook_id as string | null,
+                        event: data.event as string,
+                        command: data.command as string,
+                        status: (data.success as boolean) ? 'completed' : 'failed',
+                        output: data.output as string | undefined,
+                        error: data.error as string | undefined,
+                    }],
+                });
+                break;
         }
     }
 
@@ -348,9 +447,9 @@ class ConcurrentSessionManager {
         }
     }
 
-    queueMessage(todoId: number, content: string) {
+    queueMessage(todoId: number, content: string, images?: MessageImage[]) {
         const session = this.getSession(todoId);
-        this.updateSession(todoId, { queuedMessages: [...session.queuedMessages, content] });
+        this.updateSession(todoId, { queuedMessages: [...session.queuedMessages, { content, images }] });
     }
 
     clearQueue(todoId: number) {
@@ -392,16 +491,16 @@ export function useRunningSessions(): number[] {
 
 // Hook for session actions (no re-renders)
 export function useConcurrentSessions() {
-    const sendMessage = useCallback((todoId: number, content: string) => {
-        return sessionManager.sendMessage(todoId, content);
+    const sendMessage = useCallback((todoId: number, content: string, images?: MessageImage[]) => {
+        return sessionManager.sendMessage(todoId, content, images);
     }, []);
 
     const cancel = useCallback((todoId: number) => {
         return sessionManager.cancel(todoId);
     }, []);
 
-    const queueMessage = useCallback((todoId: number, content: string) => {
-        sessionManager.queueMessage(todoId, content);
+    const queueMessage = useCallback((todoId: number, content: string, images?: MessageImage[]) => {
+        sessionManager.queueMessage(todoId, content, images);
     }, []);
 
     const clearQueue = useCallback((todoId: number) => {
@@ -458,9 +557,9 @@ export function useTodoSession(todoId: number) {
 
     return {
         ...session,
-        sendMessage: useCallback((content: string) => sendMessage(todoId, content), [sendMessage, todoId]),
+        sendMessage: useCallback((content: string, images?: MessageImage[]) => sendMessage(todoId, content, images), [sendMessage, todoId]),
         cancel: useCallback(() => cancel(todoId), [cancel, todoId]),
-        queueMessage: useCallback((content: string) => queueMessage(todoId, content), [queueMessage, todoId]),
+        queueMessage: useCallback((content: string, images?: MessageImage[]) => queueMessage(todoId, content, images), [queueMessage, todoId]),
         clearQueue: useCallback(() => clearQueue(todoId), [clearQueue, todoId]),
         clearQueueItem: useCallback((index: number) => clearQueueItem(todoId, index), [clearQueueItem, todoId]),
         setDraftInput: useCallback((input: string) => setDraftInput(todoId, input), [setDraftInput, todoId]),

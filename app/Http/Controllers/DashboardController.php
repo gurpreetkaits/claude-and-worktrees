@@ -18,7 +18,7 @@ class DashboardController extends Controller
     {
         $worktrees = Worktree::orderBy('created_at', 'desc')->get();
         $todos = Todo::with('worktree')
-            ->orderBy('created_at', 'desc')
+            ->orderBy('position', 'asc')
             ->get();
         $settings = UserSetting::getSettings();
 
@@ -34,7 +34,7 @@ class DashboardController extends Controller
     {
         $worktrees = Worktree::orderBy('created_at', 'desc')->get();
         $todos = Todo::with('worktree')
-            ->orderBy('created_at', 'desc')
+            ->orderBy('position', 'asc')
             ->get();
 
         $worktree = $todo->worktree;

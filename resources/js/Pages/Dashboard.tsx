@@ -1,13 +1,31 @@
 import { Head, router } from '@inertiajs/react';
-import { useState, useEffect, useMemo, Fragment, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, Fragment, useCallback, useRef } from 'react';
 import { PageProps, Worktree, Todo, GitStatus, ClaudeModelsConfig, UserSettings } from '@/types';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Dialog, DialogPanel, Transition, TransitionChild } from '@headlessui/react';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 // CommandPalette removed - using inline search instead
 import { NewTaskDialog } from '@/Components/NewTaskDialog';
 import { SettingsDialog } from '@/Components/SettingsDialog';
 import { TodoChat } from '@/Components/TodoChat';
 import { ChangesPanel } from '@/Components/ChangesPanel';
+import { TerminalPanel } from '@/Components/TerminalPanel';
 import { KeyboardShortcutsHelp } from '@/Components/KeyboardShortcutsHelp';
 import { useTaskSwitcher } from '@/hooks/useTaskSwitcher';
 import { useKeyboardShortcuts, ShortcutAction } from '@/hooks/useKeyboardShortcuts';
@@ -27,6 +45,9 @@ import {
     ArchiveIcon,
     CheckCircleIcon,
     CircleIcon,
+    TerminalIcon,
+    CopyIcon,
+    GripVerticalIcon,
 } from '@/Components/ui/Icons';
 import { RunningDots } from '@/Components/ui/RunningDots';
 
@@ -53,27 +74,97 @@ export default function Dashboard({
 }: DashboardProps) {
     const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
     const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-    const [showChangesPanel, setShowChangesPanel] = useState(true);
+    const [rightPanel, setRightPanel] = useState<'changes' | 'terminal' | null>('changes');
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+    const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
     const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showSearchResults, setShowSearchResults] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Filter out archived tasks for display
     const activeTodos = useMemo(() => todos.filter(t => !t.is_archived), [todos]);
     const archivedTodos = useMemo(() => todos.filter(t => t.is_archived), [todos]);
     const [showArchived, setShowArchived] = useState(false);
 
-    // Filter tasks based on search query
+    // Ordered todos for drag and drop
+    const [orderedTodoIds, setOrderedTodoIds] = useState<number[]>(() => todos.map(t => t.id));
+
+    // Update ordered IDs when todos change (e.g., new task added)
+    useEffect(() => {
+        const currentIds = new Set(orderedTodoIds);
+        const newIds = todos.map(t => t.id);
+        const hasNewTodos = newIds.some(id => !currentIds.has(id));
+        const hasRemovedTodos = orderedTodoIds.some(id => !newIds.includes(id));
+
+        if (hasNewTodos || hasRemovedTodos) {
+            // Keep existing order, add new todos at the start, remove deleted ones
+            const existingOrdered = orderedTodoIds.filter(id => newIds.includes(id));
+            const newTodoIds = newIds.filter(id => !currentIds.has(id));
+            setOrderedTodoIds([...newTodoIds, ...existingOrdered]);
+        }
+    }, [todos]);
+
+    // Filter tasks based on search query, maintaining order
     const displayedTodos = useMemo(() => {
         const baseTodos = showArchived ? todos : activeTodos;
-        if (!searchQuery.trim()) return baseTodos;
+        const todoMap = new Map(baseTodos.map(t => [t.id, t]));
+
+        // Get todos in the correct order
+        let ordered = orderedTodoIds
+            .filter(id => todoMap.has(id))
+            .map(id => todoMap.get(id)!);
+
+        // Add any todos that aren't in orderedTodoIds (shouldn't happen, but safety)
+        const orderedSet = new Set(orderedTodoIds);
+        const unordered = baseTodos.filter(t => !orderedSet.has(t.id));
+        ordered = [...unordered, ...ordered];
+
+        if (!searchQuery.trim()) return ordered;
         const query = searchQuery.toLowerCase();
-        return baseTodos.filter(todo =>
+        return ordered.filter(todo =>
             todo.title.toLowerCase().includes(query) ||
             todo.context?.toLowerCase().includes(query) ||
             worktrees.find(w => w.id === todo.worktree_id)?.name.toLowerCase().includes(query)
         );
-    }, [todos, activeTodos, showArchived, searchQuery, worktrees]);
+    }, [todos, activeTodos, showArchived, searchQuery, worktrees, orderedTodoIds]);
+
+    // Drag and drop sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    // Handle drag end
+    const handleDragEnd = useCallback((event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            setOrderedTodoIds((items) => {
+                const oldIndex = items.indexOf(Number(active.id));
+                const newIndex = items.indexOf(Number(over.id));
+                const newOrder = arrayMove(items, oldIndex, newIndex);
+
+                // Persist to backend
+                fetch(route('todos.reorder'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                    },
+                    body: JSON.stringify({ orderedIds: newOrder }),
+                });
+
+                return newOrder;
+            });
+        }
+    }, []);
 
     // Fast task switching with caching
     const {
@@ -124,8 +215,7 @@ export default function Dashboard({
                 break;
             case 'SEARCH':
                 // Focus the search input
-                const searchInput = document.querySelector('input[placeholder="Search tasks..."]') as HTMLInputElement;
-                searchInput?.focus();
+                searchInputRef.current?.focus();
                 break;
             case 'SETTINGS':
                 setShowSettingsDialog(true);
@@ -137,7 +227,7 @@ export default function Dashboard({
                 switchToPrevious();
                 break;
             case 'TOGGLE_CHANGES':
-                setShowChangesPanel(prev => !prev);
+                setRightPanel(prev => prev === 'changes' ? null : 'changes');
                 break;
             case 'CANCEL_STREAM':
                 setOpenMenuId(null);
@@ -181,7 +271,10 @@ export default function Dashboard({
 
     // Close menu when clicking outside
     useEffect(() => {
-        const handleClickOutside = () => setOpenMenuId(null);
+        const handleClickOutside = () => {
+            setOpenMenuId(null);
+            setMenuPosition(null);
+        };
         if (openMenuId !== null) {
             document.addEventListener('click', handleClickOutside);
             return () => document.removeEventListener('click', handleClickOutside);
@@ -199,92 +292,177 @@ export default function Dashboard({
         setOpenMenuId(null);
     };
 
+    const handleDuplicateTask = (todoId: number) => {
+        router.post(route('todos.duplicate', todoId), {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                // The new task will be added to the list automatically via Inertia
+            },
+        });
+        setOpenMenuId(null);
+    };
+
+    // Search results for dropdown
+    const searchResults = useMemo(() => {
+        if (!searchQuery.trim()) return [];
+        const query = searchQuery.toLowerCase();
+        return todos.filter(todo =>
+            todo.title.toLowerCase().includes(query) ||
+            todo.description?.toLowerCase().includes(query) ||
+            todo.context?.toLowerCase().includes(query) ||
+            worktrees.find(w => w.id === todo.worktree_id)?.name.toLowerCase().includes(query)
+        ).slice(0, 5);
+    }, [searchQuery, todos, worktrees]);
+
+    const handleSearchResultClick = (todoId: number) => {
+        switchToTask(todoId);
+        setSearchQuery('');
+        setShowSearchResults(false);
+        searchInputRef.current?.blur();
+    };
+
     // VS Code style Title Bar
     const TitleBar = () => (
-        <div className="h-10 bg-base-200 border-b border-base-300 flex items-center px-3 select-none shrink-0">
+        <div className="h-12 bg-base-200 border-b border-base-300 flex items-center px-4 select-none shrink-0">
             {/* Left - App icon and menu */}
-            <div className="flex items-center gap-2 min-w-[140px]">
-                <BrainIcon className="w-4 h-4 text-primary" />
+            <div className="flex items-center gap-2 min-w-[160px]">
+                <BrainIcon className="w-5 h-5 text-primary" />
                 <span className="text-sm font-semibold text-base-content hidden sm:inline">Claude Worktree</span>
             </div>
 
-            {/* Center - Search input */}
+            {/* Center - Search input with dropdown */}
             <div className="flex-1 flex justify-center px-4">
-                <div className="join w-full max-w-md">
-                    <div className="join-item flex items-center px-3 bg-base-100 border border-base-300 border-r-0 rounded-l-lg">
-                        <SearchIcon className="w-4 h-4 text-base-content/40" />
+                <div className="relative w-full max-w-lg">
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                            <SearchIcon className="w-4 h-4 text-base-content/40" />
+                        </div>
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setShowSearchResults(true);
+                            }}
+                            onFocus={() => setShowSearchResults(true)}
+                            onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                            placeholder="Search tasks... (⌘K)"
+                            className="input input-bordered w-full pl-10 pr-10 bg-base-100/80 focus:bg-base-100 focus:border-primary border-base-300 rounded-lg h-9 text-sm"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setShowSearchResults(false);
+                                }}
+                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-base-content/40 hover:text-base-content"
+                            >
+                                <XIcon className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search tasks..."
-                        className="input input-sm input-bordered join-item flex-1 focus:outline-none focus:border-primary bg-base-100"
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            className="join-item flex items-center px-2 bg-base-100 border border-base-300 border-l-0 rounded-r-lg hover:bg-base-200"
-                        >
-                            <XIcon className="w-3.5 h-3.5 text-base-content/40" />
-                        </button>
+
+                    {/* Search Results Dropdown */}
+                    {showSearchResults && searchQuery && searchResults.length > 0 && (
+                        <ul className="absolute left-0 right-0 top-full mt-2 menu bg-base-100 rounded-lg shadow-2xl border border-base-300 p-2 z-[9999] max-h-80 overflow-y-auto">
+                            {searchResults.map((todo) => {
+                                const worktree = worktreeById[todo.worktree_id];
+                                const isRunning = runningSessions.includes(todo.id);
+                                return (
+                                    <li key={todo.id}>
+                                        <button
+                                            onClick={() => handleSearchResultClick(todo.id)}
+                                            className="flex flex-col items-start gap-1 py-2 px-3 hover:bg-base-200 rounded-md"
+                                        >
+                                            <div className="flex items-center gap-2 w-full">
+                                                {isRunning ? (
+                                                    <span className="loading loading-spinner loading-xs text-primary" />
+                                                ) : todo.status === 'completed' ? (
+                                                    <CheckCircleIcon className="w-4 h-4 text-success flex-shrink-0" />
+                                                ) : (
+                                                    <CircleIcon className="w-4 h-4 text-base-content/30 flex-shrink-0" />
+                                                )}
+                                                <span className="font-medium text-sm truncate flex-1 text-left">{todo.title}</span>
+                                            </div>
+                                            {worktree && (
+                                                <div className="flex items-center gap-2 text-xs text-base-content/50 ml-6">
+                                                    <span className="flex items-center gap-1">
+                                                        <FolderIcon className="w-3 h-3" />
+                                                        {worktree.name}
+                                                    </span>
+                                                    {worktree.branch && (
+                                                        <span className="flex items-center gap-1">
+                                                            <GitBranchIcon className="w-3 h-3" />
+                                                            {worktree.branch}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+
+                    {showSearchResults && searchQuery && searchResults.length === 0 && (
+                        <div className="absolute left-0 right-0 top-full mt-2 bg-base-100 rounded-lg shadow-2xl border border-base-300 p-4 z-[9999]">
+                            <p className="text-sm text-base-content/50 text-center">No tasks found</p>
+                        </div>
                     )}
                 </div>
             </div>
 
-            {/* Right - placeholder for balance */}
-            <div className="min-w-[140px]" />
-        </div>
-    );
-
-    // VS Code style Activity Bar (left icon strip)
-    const ActivityBar = () => (
-        <div className="w-12 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 shrink-0">
-            {/* New Task */}
-            <div className="tooltip tooltip-right" data-tip="New Task (N)">
-                <button
-                    onClick={handleNewTask}
-                    className="w-10 h-10 flex items-center justify-center text-base-content/60 hover:text-primary transition-colors rounded-lg hover:bg-base-300"
-                >
-                    <PlusIcon className="w-5 h-5" />
-                </button>
-            </div>
-
-            {/* Tasks - Active indicator */}
-            <div className="tooltip tooltip-right" data-tip="Tasks">
-                <button className="w-10 h-10 flex items-center justify-center text-primary transition-colors rounded-lg relative">
-                    <FolderIcon className="w-5 h-5" />
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r" />
-                </button>
-            </div>
-
-            {/* Git Changes */}
-            {currentTodo && currentWorktree && (
-                <div className="tooltip tooltip-right" data-tip={showChangesPanel ? 'Hide Changes' : 'Show Changes'}>
+            {/* Right - Action buttons */}
+            <div className="flex items-center gap-1 min-w-[160px] justify-end">
+                {/* New Task */}
+                <div className="tooltip tooltip-bottom" data-tip="New Task (N)">
                     <button
-                        onClick={() => setShowChangesPanel(!showChangesPanel)}
-                        className={`w-10 h-10 flex items-center justify-center transition-colors rounded-lg hover:bg-base-300 ${
-                            showChangesPanel ? 'text-primary' : 'text-base-content/60 hover:text-base-content'
-                        }`}
+                        onClick={handleNewTask}
+                        className="btn btn-ghost btn-sm btn-square"
                     >
-                        <GitDiffIcon className="w-5 h-5" />
+                        <PlusIcon className="w-5 h-5" />
                     </button>
                 </div>
-            )}
 
-            <div className="flex-1" />
+                {/* Git Changes */}
+                {currentTodo && currentWorktree && (
+                    <div className="tooltip tooltip-bottom" data-tip={rightPanel === 'changes' ? 'Hide Changes' : 'Show Changes'}>
+                        <button
+                            onClick={() => setRightPanel(prev => prev === 'changes' ? null : 'changes')}
+                            className={`btn btn-ghost btn-sm btn-square ${rightPanel === 'changes' ? 'text-primary' : ''}`}
+                        >
+                            <GitDiffIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
 
-            {/* Settings at bottom */}
-            <div className="tooltip tooltip-right" data-tip="Settings">
-                <button
-                    onClick={() => setShowSettingsDialog(true)}
-                    className="w-10 h-10 flex items-center justify-center text-base-content/60 hover:text-base-content transition-colors rounded-lg hover:bg-base-300"
-                >
-                    <SettingsIcon className="w-5 h-5" />
-                </button>
+                {/* Terminal */}
+                {currentTodo && currentWorktree && (
+                    <div className="tooltip tooltip-bottom" data-tip={rightPanel === 'terminal' ? 'Hide Terminal' : 'Show Terminal'}>
+                        <button
+                            onClick={() => setRightPanel(prev => prev === 'terminal' ? null : 'terminal')}
+                            className={`btn btn-ghost btn-sm btn-square ${rightPanel === 'terminal' ? 'text-primary' : ''}`}
+                        >
+                            <TerminalIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
+
+                {/* Settings */}
+                <div className="tooltip tooltip-bottom" data-tip="Settings (,)">
+                    <button
+                        onClick={() => setShowSettingsDialog(true)}
+                        className="btn btn-ghost btn-sm btn-square"
+                    >
+                        <SettingsIcon className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
         </div>
     );
+
 
     // VS Code style Status Bar
     const StatusBar = () => (
@@ -316,13 +494,149 @@ export default function Dashboard({
         </div>
     );
 
+    // Sortable Task Card Component
+    const SortableTaskCard = ({ todo, index }: { todo: Todo; index: number }) => {
+        const {
+            attributes,
+            listeners,
+            setNodeRef,
+            transform,
+            transition,
+            isDragging,
+        } = useSortable({ id: todo.id });
+
+        const style = {
+            transform: CSS.Transform.toString(transform),
+            transition,
+            opacity: isDragging ? 0.5 : 1,
+            zIndex: isDragging ? 1000 : 'auto',
+        };
+
+        const worktree = worktreeById[todo.worktree_id];
+        const isActive = currentTodo?.id === todo.id;
+        const isRunning = runningSessions.includes(todo.id);
+
+        return (
+            <div
+                ref={setNodeRef}
+                style={style}
+                className={`group cursor-pointer transition-colors ${
+                    isDragging
+                        ? 'bg-base-100 shadow-lg rounded-lg'
+                        : isRunning
+                        ? 'bg-primary/5 border-l-2 border-primary'
+                        : isActive
+                        ? 'bg-base-100 border-l-2 border-primary'
+                        : 'hover:bg-base-100/50 border-l-2 border-transparent'
+                } ${todo.is_archived ? 'opacity-50' : ''}`}
+                onClick={() => switchToTask(todo.id)}
+            >
+                <div className="flex items-start gap-2 px-3 py-3">
+                    {/* Drag Handle */}
+                    <div
+                        {...attributes}
+                        {...listeners}
+                        className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5 cursor-grab active:cursor-grabbing text-base-content/30 hover:text-base-content/60"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <GripVerticalIcon className="w-4 h-4" />
+                    </div>
+
+                    {/* Status indicator */}
+                    <div className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
+                        {isRunning ? (
+                            <span className="loading loading-spinner loading-sm text-primary" />
+                        ) : todo.status === 'completed' ? (
+                            <CheckCircleIcon className="w-4 h-4 text-success" />
+                        ) : (
+                            <CircleIcon className="w-4 h-4 text-base-content/30" />
+                        )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                        {/* Title row */}
+                        <div className="flex items-center gap-2">
+                            <span className={`text-sm truncate ${isActive || isRunning ? 'text-base-content font-medium' : 'text-base-content/80'}`}>
+                                {todo.title}
+                            </span>
+                            {isRunning && (
+                                <span className="badge badge-primary badge-xs">
+                                    Running
+                                </span>
+                            )}
+                            {!isRunning && index < 9 && (
+                                <kbd className="kbd kbd-xs text-base-content/40 shrink-0">
+                                    {index + 1}
+                                </kbd>
+                            )}
+                        </div>
+
+                        {/* Description or Context */}
+                        {(todo.description || todo.context) && (
+                            <p className="text-xs text-base-content/50 mt-1 line-clamp-2 leading-relaxed">
+                                {todo.description || todo.context}
+                            </p>
+                        )}
+
+                        {/* Worktree info */}
+                        {worktree && (
+                            <div className="flex items-center gap-3 mt-2 text-[11px] text-base-content/40">
+                                <span className="flex items-center gap-1">
+                                    <FolderIcon className="w-3 h-3" />
+                                    {worktree.name}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <GitBranchIcon className="w-3 h-3" />
+                                    {worktree.branch || 'main'}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Actions button */}
+                    <div className={`shrink-0 ${openMenuId === todo.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (openMenuId === todo.id) {
+                                    setOpenMenuId(null);
+                                    setMenuPosition(null);
+                                } else {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setMenuPosition({
+                                        top: rect.bottom + 4,
+                                        left: rect.right - 160,
+                                    });
+                                    setOpenMenuId(todo.id);
+                                }
+                            }}
+                            className="btn btn-ghost btn-xs btn-square"
+                        >
+                            <MoreVerticalIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     // VS Code style Sidebar
     const Sidebar = () => (
         <div className="h-full flex flex-col bg-base-200">
             {/* Section Header */}
-            <div className="h-9 flex items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-base-content/60 shrink-0">
+            <div className="h-10 flex items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-base-content/60 shrink-0 border-b border-base-300">
                 <span>Tasks</span>
-                <span className="text-base-content/40">{displayedTodos.length}</span>
+                <div className="flex items-center gap-1">
+                    <span className="badge badge-ghost badge-sm">{displayedTodos.length}</span>
+                    <button
+                        onClick={handleNewTask}
+                        className="btn btn-ghost btn-xs btn-square hover:bg-base-300"
+                        title="New Task (N)"
+                    >
+                        <PlusIcon className="w-3.5 h-3.5" />
+                    </button>
+                </div>
             </div>
 
             {/* Tasks list */}
@@ -334,90 +648,22 @@ export default function Dashboard({
                         <p className="text-xs text-base-content/40 mt-1">Press N to create a task</p>
                     </div>
                 ) : (
-                    <div className="space-y-px">
-                        {displayedTodos.map((todo, index) => {
-                            const worktree = worktreeById[todo.worktree_id];
-                            const isActive = currentTodo?.id === todo.id;
-                            const isRunning = runningSessions.includes(todo.id);
-                            return (
-                                <div
-                                    key={todo.id}
-                                    onClick={() => switchToTask(todo.id)}
-                                    className={`group flex items-start gap-2 px-4 py-2.5 cursor-pointer transition-all ${
-                                        isRunning
-                                            ? 'bg-primary/5 border-l-2 border-primary'
-                                            : isActive
-                                            ? 'bg-base-100 border-l-2 border-primary'
-                                            : 'hover:bg-base-100/50 border-l-2 border-transparent'
-                                    } ${todo.is_archived ? 'opacity-50' : ''}`}
-                                >
-                                    {/* Status indicator */}
-                                    <div className="w-5 h-5 flex items-center justify-center shrink-0">
-                                        {isRunning ? (
-                                            <span className="loading loading-spinner loading-sm text-primary" />
-                                        ) : todo.status === 'completed' ? (
-                                            <CheckCircleIcon className="w-4 h-4 text-success" />
-                                        ) : (
-                                            <CircleIcon className="w-4 h-4 text-base-content/30" />
-                                        )}
-                                    </div>
-
-                                    {/* Content */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-sm truncate ${isActive || isRunning ? 'text-base-content font-medium' : 'text-base-content/80'}`}>
-                                                {todo.title}
-                                            </span>
-                                            {isRunning && (
-                                                <span className="badge badge-primary badge-xs gap-1">
-                                                    Running
-                                                </span>
-                                            )}
-                                            {!isRunning && index < 9 && (
-                                                <kbd className="text-[9px] px-1 py-0.5 bg-base-300 rounded text-base-content/40 shrink-0">
-                                                    {index + 1}
-                                                </kbd>
-                                            )}
-                                        </div>
-                                        {worktree && (
-                                            <div className="flex items-center gap-2 mt-1 text-[11px] text-base-content/50">
-                                                <span className="flex items-center gap-1">
-                                                    <FolderIcon className="w-3 h-3" />
-                                                    {worktree.name}
-                                                </span>
-                                                <span className="flex items-center gap-1">
-                                                    <GitBranchIcon className="w-3 h-3" />
-                                                    {worktree.branch || 'main'}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Actions on hover */}
-                                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 shrink-0">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setEditingTodo(todo);
-                                            }}
-                                            className="w-6 h-6 flex items-center justify-center text-base-content/50 hover:text-base-content rounded hover:bg-base-300"
-                                        >
-                                            <EditIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleArchiveTask(todo.id);
-                                            }}
-                                            className="w-6 h-6 flex items-center justify-center text-base-content/50 hover:text-base-content rounded hover:bg-base-300"
-                                        >
-                                            <ArchiveIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                    >
+                        <SortableContext
+                            items={displayedTodos.map(t => t.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <div className="divide-y divide-base-300/50">
+                                {displayedTodos.map((todo, index) => (
+                                    <SortableTaskCard key={todo.id} todo={todo} index={index} />
+                                ))}
+                            </div>
+                        </SortableContext>
+                    </DndContext>
                 )}
             </div>
 
@@ -426,7 +672,7 @@ export default function Dashboard({
                 <div className="border-t border-base-300 shrink-0">
                     <button
                         onClick={() => setShowArchived(!showArchived)}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-xs text-base-content/50 hover:text-base-content hover:bg-base-100/50 transition-colors"
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-base-content/50 hover:text-base-content hover:bg-base-100/50 transition-colors"
                     >
                         <ArchiveIcon className="w-4 h-4" />
                         {showArchived ? 'Hide' : 'Show'} archived ({archivedTodos.length})
@@ -503,11 +749,8 @@ export default function Dashboard({
                 {/* Title Bar */}
                 <TitleBar />
 
-                {/* Main area with activity bar, sidebar, and content */}
+                {/* Main area with sidebar and content */}
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Activity Bar */}
-                    <ActivityBar />
-
                     {/* Main content with resizable panels */}
                     <PanelGroup direction="horizontal" className="flex-1">
                         {/* Sidebar */}
@@ -524,16 +767,24 @@ export default function Dashboard({
                             </div>
                         </Panel>
 
-                        {/* Changes panel */}
-                        {currentTodo && currentWorktree && showChangesPanel && (
+                        {/* Right panel - Changes or Terminal */}
+                        {currentTodo && currentWorktree && rightPanel && (
                             <>
                                 <PanelResizeHandle className="w-px bg-base-300 hover:bg-primary hover:w-0.5 transition-all cursor-col-resize" />
                                 <Panel defaultSize={22} minSize={15} maxSize={35}>
-                                    <ChangesPanel
-                                        worktree={currentWorktree}
-                                        initialStatus={status}
-                                        initialDiff={diff}
-                                    />
+                                    {rightPanel === 'changes' ? (
+                                        <ChangesPanel
+                                            worktree={currentWorktree}
+                                            todo={currentTodo}
+                                            initialStatus={status}
+                                            initialDiff={diff}
+                                        />
+                                    ) : (
+                                        <TerminalPanel
+                                            todoId={currentTodo.id}
+                                            workingDirectory={currentWorktree.path}
+                                        />
+                                    )}
                                 </Panel>
                             </>
                         )}
@@ -583,6 +834,69 @@ export default function Dashboard({
                         </span>
                     </div>
                 </div>
+            )}
+
+            {/* Floating Task Menu */}
+            {openMenuId !== null && menuPosition && (
+                <>
+                    {/* Backdrop to close menu */}
+                    <div
+                        className="fixed inset-0 z-[9998]"
+                        onClick={() => {
+                            setOpenMenuId(null);
+                            setMenuPosition(null);
+                        }}
+                    />
+                    {/* Menu */}
+                    <ul
+                        className="fixed menu bg-base-100 rounded-lg shadow-2xl border border-base-300 w-40 p-1 z-[9999]"
+                        style={{ top: menuPosition.top, left: menuPosition.left }}
+                    >
+                        <li>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const todo = todos.find(t => t.id === openMenuId);
+                                    if (todo) setEditingTodo(todo);
+                                    setOpenMenuId(null);
+                                    setMenuPosition(null);
+                                }}
+                                className="flex items-center gap-2 text-sm"
+                            >
+                                <EditIcon className="w-4 h-4" />
+                                Edit
+                            </button>
+                        </li>
+                        <li>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (openMenuId) handleDuplicateTask(openMenuId);
+                                    setOpenMenuId(null);
+                                    setMenuPosition(null);
+                                }}
+                                className="flex items-center gap-2 text-sm"
+                            >
+                                <CopyIcon className="w-4 h-4" />
+                                Duplicate
+                            </button>
+                        </li>
+                        <li>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (openMenuId) handleArchiveTask(openMenuId);
+                                    setOpenMenuId(null);
+                                    setMenuPosition(null);
+                                }}
+                                className="flex items-center gap-2 text-sm text-warning"
+                            >
+                                <ArchiveIcon className="w-4 h-4" />
+                                Archive
+                            </button>
+                        </li>
+                    </ul>
+                </>
             )}
 
             {/* Edit Task Dialog */}

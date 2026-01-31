@@ -1,20 +1,38 @@
-import { useState } from 'react';
-import { GitStatus, Worktree } from '@/types';
+import { useState, useEffect } from 'react';
+import { GitStatus, Worktree, Todo, TodoChange } from '@/types';
 import { DiffViewer } from './ui/DiffViewer';
-import { FileIcon, FilePlusIcon, FileMinusIcon, RefreshIcon } from './ui/Icons';
+import { FileIcon, FilePlusIcon, FileMinusIcon, RefreshIcon, GitBranchIcon } from './ui/Icons';
 import axios from 'axios';
 
 interface ChangesPanelProps {
     worktree: Worktree;
+    todo?: Todo;
     initialStatus: GitStatus[];
     initialDiff?: string;
 }
 
-export function ChangesPanel({ worktree, initialStatus, initialDiff }: ChangesPanelProps) {
+export function ChangesPanel({ worktree, todo, initialStatus, initialDiff }: ChangesPanelProps) {
     const [status, setStatus] = useState<GitStatus[]>(initialStatus);
     const [diff, setDiff] = useState(initialDiff || '');
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [viewMode, setViewMode] = useState<'task' | 'worktree'>('task');
+
+    // Task-specific changes
+    const taskChanges = todo?.changes || [];
+    const hasTaskChanges = taskChanges.length > 0;
+
+    // Auto-select first file when task changes
+    useEffect(() => {
+        if (viewMode === 'task' && hasTaskChanges && taskChanges.length > 0) {
+            const firstChange = taskChanges[0];
+            setSelectedFile(firstChange.file_path);
+            setDiff(firstChange.diff || '');
+        } else if (viewMode === 'worktree' && status.length > 0) {
+            setSelectedFile(null);
+            setDiff('');
+        }
+    }, [todo?.id, viewMode]);
 
     const refreshStatus = async () => {
         setIsLoading(true);
@@ -39,9 +57,13 @@ export function ChangesPanel({ worktree, initialStatus, initialDiff }: ChangesPa
         }
     };
 
-    const handleFileClick = async (file: string) => {
+    const handleFileClick = async (file: string, taskDiff?: string) => {
         setSelectedFile(file);
-        await fetchDiff(file);
+        if (taskDiff) {
+            setDiff(taskDiff);
+        } else {
+            await fetchDiff(file);
+        }
     };
 
     const getIcon = (type: string) => {
@@ -56,46 +78,91 @@ export function ChangesPanel({ worktree, initialStatus, initialDiff }: ChangesPa
         }
     };
 
+    const displayItems = viewMode === 'task' && hasTaskChanges
+        ? taskChanges.map(change => ({
+            file: change.file_path,
+            type: change.change_type,
+            diff: change.diff,
+        }))
+        : status.map(s => ({
+            file: s.file,
+            type: s.type,
+            diff: undefined,
+        }));
+
     return (
-        <div className="h-full flex flex-col bg-bg-primary">
-            <div className="h-12 flex items-center justify-between px-4 border-b border-border">
-                <span className="text-sm font-medium text-text-high">Changes</span>
-                <button
-                    onClick={refreshStatus}
-                    disabled={isLoading}
-                    className="p-1 hover:bg-bg-panel rounded transition-colors"
-                >
-                    <RefreshIcon className={`w-4 h-4 text-text-low ${isLoading ? 'animate-spin' : ''}`} />
-                </button>
+        <div className="h-full flex flex-col bg-base-100">
+            {/* Header */}
+            <div className="h-10 flex items-center justify-between px-3 border-b border-base-300 shrink-0">
+                <span className="text-xs font-semibold text-base-content/60 uppercase tracking-wider">Changes</span>
+                <div className="flex items-center gap-1">
+                    {hasTaskChanges && (
+                        <div className="join">
+                            <button
+                                onClick={() => setViewMode('task')}
+                                className={`join-item btn btn-xs ${viewMode === 'task' ? 'btn-primary' : 'btn-ghost'}`}
+                            >
+                                Task
+                            </button>
+                            <button
+                                onClick={() => setViewMode('worktree')}
+                                className={`join-item btn btn-xs ${viewMode === 'worktree' ? 'btn-primary' : 'btn-ghost'}`}
+                            >
+                                All
+                            </button>
+                        </div>
+                    )}
+                    <button
+                        onClick={refreshStatus}
+                        disabled={isLoading}
+                        className="btn btn-ghost btn-xs btn-square"
+                    >
+                        <RefreshIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto scrollbar-hide">
-                {status.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-text-low">
-                        No changes
+            {/* Task info */}
+            {todo && viewMode === 'task' && (
+                <div className="px-3 py-2 bg-base-200/50 border-b border-base-300 text-xs">
+                    <div className="font-medium text-base-content truncate">{todo.title}</div>
+                    <div className="text-base-content/50 mt-0.5">
+                        {hasTaskChanges ? `${taskChanges.length} file${taskChanges.length > 1 ? 's' : ''} changed` : 'No changes recorded'}
+                    </div>
+                </div>
+            )}
+
+            {/* File list */}
+            <div className="flex-1 overflow-y-auto">
+                {displayItems.length === 0 ? (
+                    <div className="p-4 text-center">
+                        <GitBranchIcon className="w-8 h-8 text-base-content/20 mx-auto mb-2" />
+                        <p className="text-sm text-base-content/50">
+                            {viewMode === 'task' ? 'No changes for this task' : 'No changes in worktree'}
+                        </p>
                     </div>
                 ) : (
                     <div className="p-2 space-y-0.5">
-                        {status.map((file) => (
+                        {displayItems.map((item) => (
                             <button
-                                key={file.file}
-                                onClick={() => handleFileClick(file.file)}
+                                key={item.file}
+                                onClick={() => handleFileClick(item.file, item.diff || undefined)}
                                 className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-xs font-mono transition-colors ${
-                                    selectedFile === file.file
-                                        ? 'bg-brand/10 text-brand'
-                                        : 'text-text-high hover:bg-bg-panel'
+                                    selectedFile === item.file
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-base-content hover:bg-base-200'
                                 }`}
                             >
-                                {getIcon(file.type)}
-                                <span className="truncate flex-1">{file.file}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                    file.type === 'added' || file.type === 'untracked'
-                                        ? 'bg-success/10 text-success'
-                                        : file.type === 'deleted'
-                                        ? 'bg-error/10 text-error'
-                                        : 'bg-warning/10 text-warning'
+                                {getIcon(item.type)}
+                                <span className="truncate flex-1">{item.file}</span>
+                                <span className={`badge badge-xs ${
+                                    item.type === 'added' || item.type === 'untracked'
+                                        ? 'badge-success'
+                                        : item.type === 'deleted'
+                                        ? 'badge-error'
+                                        : 'badge-warning'
                                 }`}>
-                                    {file.type === 'untracked' ? 'new' : file.type}
+                                    {item.type === 'untracked' ? 'new' : item.type}
                                 </span>
                             </button>
                         ))}
@@ -103,8 +170,9 @@ export function ChangesPanel({ worktree, initialStatus, initialDiff }: ChangesPa
                 )}
             </div>
 
+            {/* Diff viewer */}
             {diff && selectedFile && (
-                <div className="border-t border-border flex-1 min-h-0 max-h-[60%] overflow-auto scrollbar-hide">
+                <div className="border-t border-base-300 flex-1 min-h-0 max-h-[60%] overflow-auto">
                     <DiffViewer diff={diff} fileName={selectedFile} />
                 </div>
             )}

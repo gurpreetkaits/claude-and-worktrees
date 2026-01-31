@@ -20,6 +20,7 @@ class Todo extends Model
         'message_suffix',
         'status',
         'is_archived',
+        'position',
     ];
 
     public function worktree(): BelongsTo

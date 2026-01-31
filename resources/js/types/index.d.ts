@@ -101,11 +101,18 @@ export interface ClaudeSession {
     updated_at: string;
 }
 
+export type HookEvent =
+    | 'before_change'
+    | 'after_change'
+    | 'task_started'
+    | 'task_completed'
+    | 'task_failed';
+
 export interface Hook {
     id: string;
     directory_pattern: string;
     command: string;
-    event: 'before_change' | 'after_change';
+    event: HookEvent;
     enabled: boolean;
 }
 

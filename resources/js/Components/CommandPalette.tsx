@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment, useCallback } from 'react';
 import { router } from '@inertiajs/react';
 import { Dialog, DialogPanel, Transition, TransitionChild, Combobox, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import { Todo, Worktree } from '@/types';
-import { SearchIcon, SparklesIcon, FolderIcon, GitBranchIcon, PlusIcon, CircleIcon, LoaderIcon, CheckCircleIcon, XCircleIcon } from './ui/Icons';
+import { SearchIcon, SparklesIcon, FolderIcon, PlusIcon, CircleIcon, LoaderIcon, CheckCircleIcon, XCircleIcon } from './ui/Icons';
 
 interface CommandPaletteProps {
     show: boolean;
@@ -31,7 +31,7 @@ function StatusIcon({ status }: { status: string }) {
         case 'failed':
             return <XCircleIcon className="w-4 h-4 text-error" />;
         default:
-            return <CircleIcon className="w-4 h-4 text-base-content/30" />;
+            return <CircleIcon className="w-4 h-4 text-text-low" />;
     }
 }
 
@@ -44,7 +44,6 @@ export function CommandPalette({
 }: CommandPaletteProps) {
     const [query, setQuery] = useState('');
 
-    // Reset query when dialog opens
     useEffect(() => {
         if (show) {
             setQuery('');
@@ -54,7 +53,6 @@ export function CommandPalette({
     const buildItems = useCallback((): CommandItem[] => {
         const items: CommandItem[] = [];
 
-        // Actions
         items.push({
             id: 'new-task',
             type: 'action',
@@ -63,7 +61,6 @@ export function CommandPalette({
             icon: 'new',
         });
 
-        // Todos
         todos.forEach((todo) => {
             const worktree = worktrees.find((w) => w.id === todo.worktree_id);
             items.push({
@@ -76,7 +73,6 @@ export function CommandPalette({
             });
         });
 
-        // Worktrees
         worktrees.forEach((worktree) => {
             items.push({
                 id: `worktree-${worktree.id}`,
@@ -125,99 +121,96 @@ export function CommandPalette({
             <Dialog as="div" className="relative z-50" onClose={onClose}>
                 <TransitionChild
                     as={Fragment}
-                    enter="ease-out duration-200"
+                    enter="ease-out duration-300"
                     enterFrom="opacity-0"
                     enterTo="opacity-100"
-                    leave="ease-in duration-150"
+                    leave="ease-in duration-200"
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-md" />
                 </TransitionChild>
 
                 <div className="fixed inset-0 overflow-y-auto p-4 sm:p-6 md:p-20">
                     <TransitionChild
                         as={Fragment}
-                        enter="ease-out duration-200"
+                        enter="ease-out duration-300"
                         enterFrom="opacity-0 scale-95 translate-y-4"
                         enterTo="opacity-100 scale-100 translate-y-0"
-                        leave="ease-in duration-150"
+                        leave="ease-in duration-200"
                         leaveFrom="opacity-100 scale-100 translate-y-0"
                         leaveTo="opacity-0 scale-95 translate-y-4"
                     >
-                        <DialogPanel className="mx-auto max-w-2xl transform overflow-hidden rounded-2xl bg-base-100 shadow-2xl transition-all border border-base-300">
+                        <DialogPanel className="mx-auto max-w-2xl transform overflow-hidden rounded-2xl bg-bg-primary border border-border shadow-2xl transition-all">
                             <Combobox onChange={handleSelect}>
-                                {/* Search Input */}
-                                <div className="relative flex items-center border-b border-base-300">
-                                    <SearchIcon className="absolute left-5 h-5 w-5 text-base-content/40" />
+                                <div className="relative flex items-center border-b border-border">
+                                    <SearchIcon className="absolute left-5 h-5 w-5 text-text-low" />
                                     <ComboboxInput
-                                        className="w-full border-0 bg-transparent pl-14 pr-4 py-4 text-lg text-base-content placeholder:text-base-content/40 focus:outline-none focus:ring-0"
+                                        className="w-full border-0 bg-transparent pl-14 pr-4 py-4 text-lg text-text-high placeholder:text-text-low focus:outline-none focus:ring-0"
                                         placeholder="Search tasks, repositories..."
                                         onChange={(e) => setQuery(e.target.value)}
                                         autoFocus
                                     />
-                                    <kbd className="absolute right-4 kbd kbd-sm">esc</kbd>
+                                    <kbd className="absolute right-4 px-2 py-1 bg-bg-panel rounded text-xs text-text-low font-mono">esc</kbd>
                                 </div>
 
                                 <ComboboxOptions static className="max-h-[60vh] overflow-y-auto scrollbar-thin">
                                     {items.length === 0 && query && (
                                         <div className="flex flex-col items-center justify-center py-12 text-center">
-                                            <SearchIcon className="w-12 h-12 text-base-content/20 mb-4" />
-                                            <p className="text-base-content/60">No results found for "{query}"</p>
-                                            <p className="text-sm text-base-content/40 mt-1">Try a different search term</p>
+                                            <SearchIcon className="w-12 h-12 text-text-low/30 mb-4" />
+                                            <p className="text-text-normal">No results found for "{query}"</p>
+                                            <p className="text-sm text-text-low mt-1">Try a different search term</p>
                                         </div>
                                     )}
 
-                                    {/* Actions */}
                                     {actionItems.length > 0 && (
                                         <div className="p-3">
-                                            <div className="text-xs font-semibold text-base-content/50 uppercase tracking-wider px-3 py-2">
+                                            <div className="text-xs font-semibold text-text-low uppercase tracking-wider px-3 py-2">
                                                 Quick Actions
                                             </div>
                                             {actionItems.map((item) => (
                                                 <ComboboxOption
                                                     key={item.id}
                                                     value={item}
-                                                    className="flex items-center gap-4 px-4 py-3 cursor-pointer rounded-xl transition-colors data-[focus]:bg-primary/10"
+                                                    className="flex items-center gap-4 px-4 py-3 cursor-pointer rounded-xl transition-colors data-[focus]:bg-brand/10"
                                                 >
-                                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                                                        <PlusIcon className="w-5 h-5 text-primary" />
+                                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand/20 to-brand/5 flex items-center justify-center border border-brand/20">
+                                                        <PlusIcon className="w-5 h-5 text-brand" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="font-semibold text-base-content">
+                                                        <div className="font-semibold text-text-high">
                                                             {item.title}
                                                         </div>
                                                         {item.subtitle && (
-                                                            <div className="text-sm text-base-content/60">
+                                                            <div className="text-sm text-text-low">
                                                                 {item.subtitle}
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <kbd className="kbd kbd-sm">Enter</kbd>
+                                                    <kbd className="px-2 py-1 bg-bg-panel rounded text-xs text-text-low font-mono">Enter</kbd>
                                                 </ComboboxOption>
                                             ))}
                                         </div>
                                     )}
 
-                                    {/* Todos */}
                                     {todoItems.length > 0 && (
-                                        <div className="p-3 border-t border-base-300">
-                                            <div className="text-xs font-semibold text-base-content/50 uppercase tracking-wider px-3 py-2">
+                                        <div className="p-3 border-t border-border">
+                                            <div className="text-xs font-semibold text-text-low uppercase tracking-wider px-3 py-2">
                                                 Tasks
                                             </div>
                                             {todoItems.map((item) => (
                                                 <ComboboxOption
                                                     key={item.id}
                                                     value={item}
-                                                    className="flex items-center gap-4 px-4 py-3 cursor-pointer rounded-xl transition-colors data-[focus]:bg-base-200"
+                                                    className="flex items-center gap-4 px-4 py-3 cursor-pointer rounded-xl transition-colors data-[focus]:bg-bg-panel"
                                                 >
                                                     <StatusIcon status={item.status || 'pending'} />
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="font-medium text-base-content truncate">
+                                                        <div className="font-medium text-text-high truncate">
                                                             {item.title}
                                                         </div>
                                                         {item.subtitle && (
-                                                            <div className="text-sm text-base-content/60 truncate flex items-center gap-1">
+                                                            <div className="text-sm text-text-low truncate flex items-center gap-1">
                                                                 <FolderIcon className="w-3 h-3" />
                                                                 {item.subtitle}
                                                             </div>
@@ -228,27 +221,26 @@ export function CommandPalette({
                                         </div>
                                     )}
 
-                                    {/* Worktrees */}
                                     {worktreeItems.length > 0 && (
-                                        <div className="p-3 border-t border-base-300">
-                                            <div className="text-xs font-semibold text-base-content/50 uppercase tracking-wider px-3 py-2">
+                                        <div className="p-3 border-t border-border">
+                                            <div className="text-xs font-semibold text-text-low uppercase tracking-wider px-3 py-2">
                                                 Repositories
                                             </div>
                                             {worktreeItems.map((item) => (
                                                 <ComboboxOption
                                                     key={item.id}
                                                     value={item}
-                                                    className="flex items-center gap-4 px-4 py-3 cursor-pointer rounded-xl transition-colors data-[focus]:bg-base-200"
+                                                    className="flex items-center gap-4 px-4 py-3 cursor-pointer rounded-xl transition-colors data-[focus]:bg-bg-panel"
                                                 >
-                                                    <div className="w-8 h-8 rounded-lg bg-base-200 flex items-center justify-center">
-                                                        <FolderIcon className="w-4 h-4 text-base-content/60" />
+                                                    <div className="w-8 h-8 rounded-lg bg-bg-panel flex items-center justify-center">
+                                                        <FolderIcon className="w-4 h-4 text-text-low" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="font-medium text-base-content truncate">
+                                                        <div className="font-medium text-text-high truncate">
                                                             {item.title}
                                                         </div>
                                                         {item.subtitle && (
-                                                            <div className="text-sm text-base-content/60 font-mono truncate">
+                                                            <div className="text-sm text-text-low font-mono truncate">
                                                                 {item.subtitle}
                                                             </div>
                                                         )}
@@ -259,21 +251,20 @@ export function CommandPalette({
                                     )}
                                 </ComboboxOptions>
 
-                                {/* Footer */}
-                                <div className="flex items-center justify-between gap-4 px-5 py-3 border-t border-base-300 bg-base-200/50 text-sm text-base-content/60">
+                                <div className="flex items-center justify-between gap-4 px-5 py-3 border-t border-border bg-bg-secondary text-sm text-text-low">
                                     <div className="flex items-center gap-4">
                                         <span className="flex items-center gap-1.5">
-                                            <kbd className="kbd kbd-xs">↑</kbd>
-                                            <kbd className="kbd kbd-xs">↓</kbd>
+                                            <kbd className="px-1.5 py-0.5 bg-bg-panel rounded text-xs font-mono">↑</kbd>
+                                            <kbd className="px-1.5 py-0.5 bg-bg-panel rounded text-xs font-mono">↓</kbd>
                                             navigate
                                         </span>
                                         <span className="flex items-center gap-1.5">
-                                            <kbd className="kbd kbd-xs">Enter</kbd>
+                                            <kbd className="px-1.5 py-0.5 bg-bg-panel rounded text-xs font-mono">Enter</kbd>
                                             select
                                         </span>
                                     </div>
                                     <span className="flex items-center gap-1.5">
-                                        <kbd className="kbd kbd-xs">Esc</kbd>
+                                        <kbd className="px-1.5 py-0.5 bg-bg-panel rounded text-xs font-mono">Esc</kbd>
                                         close
                                     </span>
                                 </div>
