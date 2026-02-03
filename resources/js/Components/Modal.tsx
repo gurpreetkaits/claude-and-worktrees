@@ -62,7 +62,7 @@ export default function Modal({
                         leaveTo="opacity-0 scale-95"
                     >
                         <DialogPanel
-                            className={`relative transform overflow-hidden rounded-xl bg-bg-primary border border-border shadow-2xl transition-all sm:w-full ${maxWidthClass}`}
+                            className={`relative transform overflow-hidden rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl transition-all sm:w-full ${maxWidthClass}`}
                         >
                             {children}
                         </DialogPanel>

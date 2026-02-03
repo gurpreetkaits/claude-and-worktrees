@@ -3,6 +3,7 @@
 namespace App\Services\Claude;
 
 use App\Models\ClaudeSession;
+use App\Models\McpServer;
 use App\Models\Todo;
 use Generator;
 use Symfony\Component\Process\Process;
@@ -10,6 +11,11 @@ use Symfony\Component\Process\Process;
 /**
  * Claude Code executor with bidirectional protocol support.
  * Manages the full lifecycle of a Claude Code process.
+ *
+ * Based on the protocol from @anthropic-ai/claude-code:
+ * - Uses --input-format=stream-json for bidirectional communication
+ * - Uses --output-format=stream-json for streaming responses
+ * - Uses --permission-prompt-tool=stdio for permission control
  */
 class ClaudeExecutor
 {
@@ -18,6 +24,7 @@ class ClaudeExecutor
     private ?string $sessionId = null;
     private bool $interrupted = false;
 
+    // Tools to auto-approve (safe read-only tools)
     private array $autoApproveTools = [
         'Read',
         'Glob',
@@ -25,15 +32,25 @@ class ClaudeExecutor
         'LS',
     ];
 
-    private string $permissionMode = 'default';
+    // Permission modes: default, plan, acceptEdits, bypassPermissions
+    private string $permissionMode = 'bypassPermissions';
     private ?string $systemPrompt = null;
+
+    // Resume session support
+    private ?string $resumeSessionId = null;
+    private ?string $resumeMessageUuid = null;
 
     /**
      * Set permission mode for this execution.
+     * Valid modes: default, plan, acceptEdits, bypassPermissions
      */
     public function setPermissionMode(string $mode): self
     {
-        $this->permissionMode = $mode;
+        $this->permissionMode = match ($mode) {
+            'bypass', 'bypass_permissions' => 'bypassPermissions',
+            'accept_edits' => 'acceptEdits',
+            default => $mode,
+        };
         return $this;
     }
 
@@ -56,6 +73,16 @@ class ClaudeExecutor
     }
 
     /**
+     * Set session to resume from (for follow-up conversations).
+     */
+    public function setResumeSession(?string $sessionId, ?string $messageUuid = null): self
+    {
+        $this->resumeSessionId = $sessionId;
+        $this->resumeMessageUuid = $messageUuid;
+        return $this;
+    }
+
+    /**
      * Execute Claude Code and stream results.
      *
      * @param string $workingDirectory Working directory for Claude
@@ -72,17 +99,6 @@ class ClaudeExecutor
         string $model = 'sonnet',
         array $images = []
     ): Generator {
-        $command = $this->buildCommand($model);
-        $this->process = new Process($command, $workingDirectory);
-        $this->process->setTimeout(config('claude.process_timeout'));
-        $this->process->start(function ($type, $buffer) {});
-
-        $pid = $this->process->getPid();
-        $session->update(['process_id' => (string) $pid]);
-        $session->markAsRunning();
-        $this->protocol = new Protocol($this->process);
-        $pipes = $this->process->getInput();
-
         yield from $this->runWithBidirectionalIO($workingDirectory, $prompt, $session, $model, $images);
     }
 
@@ -106,6 +122,12 @@ class ClaudeExecutor
 
         $env = $this->getEnvironment();
 
+        \Log::info('[Claude] Starting process', [
+            'command' => $command,
+            'working_dir' => $workingDirectory,
+            'resume_session' => $this->resumeSessionId,
+        ]);
+
         $process = proc_open($command, $descriptors, $pipes, $workingDirectory, $env);
 
         if (!is_resource($process)) {
@@ -119,31 +141,41 @@ class ClaudeExecutor
         $status = proc_get_status($process);
         $session->update(['process_id' => (string) $status['pid']]);
 
-        $initializeRequest = json_encode([
-            'type' => 'control_request',
-            'request_id' => uniqid('init_'),
-            'request' => [
-                'subtype' => 'initialize',
-                'hooks' => new \stdClass(),
-            ],
-        ]) . "\n";
+        // Wait briefly for process to initialize and check if it crashed
+        usleep(100000); // 100ms
+        $status = proc_get_status($process);
+        if (!$status['running']) {
+            // Process crashed immediately - read stderr for error message
+            $errorOutput = stream_get_contents($stderr);
+            $stdOutput = stream_get_contents($stdout);
+            fclose($stdin);
+            fclose($stdout);
+            fclose($stderr);
+            proc_close($process);
+
+            \Log::error('[Claude] Process crashed immediately', [
+                'exit_code' => $status['exitcode'],
+                'stderr' => $errorOutput,
+                'stdout' => $stdOutput,
+            ]);
+
+            throw new \RuntimeException(
+                'Claude process crashed: ' . ($errorOutput ?: $stdOutput ?: 'Unknown error (exit code: ' . $status['exitcode'] . ')')
+            );
+        }
+
+        // Step 1: Send initialize request with hooks
+        $initializeRequest = $this->buildInitializeRequest();
         fwrite($stdin, $initializeRequest);
         fflush($stdin);
 
-        $permissionModeRequest = json_encode([
-            'type' => 'control_request',
-            'request_id' => uniqid('perm_'),
-            'request' => [
-                'subtype' => 'set_permission_mode',
-                'mode' => 'bypassPermissions',
-            ],
-        ]) . "\n";
+        // Step 2: Set permission mode
+        $permissionModeRequest = $this->buildSetPermissionModeRequest();
         fwrite($stdin, $permissionModeRequest);
         fflush($stdin);
 
-        // Build message content - use array format if images are present
+        // Step 3: Send user message
         $messageContent = $this->buildMessageContent($prompt, $images);
-
         $userMessage = json_encode([
             'type' => 'user',
             'message' => [
@@ -203,6 +235,18 @@ class ClaudeExecutor
                         continue;
                     }
 
+                    // Handle system message - extract session ID
+                    if ($parsed['type'] === MessageTypes::TYPE_SYSTEM) {
+                        $claudeSessionId = $parsed['session_id'] ?? null;
+                        if ($claudeSessionId) {
+                            $session->setClaudeSessionId($claudeSessionId);
+                            $this->sessionId = $claudeSessionId;
+                        }
+                        yield $parsed;
+                        continue;
+                    }
+
+                    // Handle control requests (permissions, hooks)
                     if ($parsed['type'] === MessageTypes::CONTROL_REQUEST) {
                         $response = $this->handleControlRequest($parsed, $stdin);
                         if ($response !== null) {
@@ -211,6 +255,7 @@ class ClaudeExecutor
                         continue;
                     }
 
+                    // Handle stream events (text deltas)
                     if ($parsed['type'] === MessageTypes::TYPE_STREAM_EVENT) {
                         $textDelta = $parsed['text_delta'] ?? '';
                         if (!empty($textDelta)) {
@@ -225,7 +270,14 @@ class ClaudeExecutor
                         continue;
                     }
 
+                    // Handle assistant messages (partial updates)
                     if ($parsed['type'] === MessageTypes::TYPE_ASSISTANT) {
+                        // Track message UUID for resume
+                        $uuid = $parsed['uuid'] ?? null;
+                        if ($uuid) {
+                            $session->setLastMessageUuid($uuid);
+                        }
+
                         $content = $parsed['content'] ?? '';
                         $delta = '';
                         if (strlen($content) > strlen($lastPartialContent)) {
@@ -257,7 +309,24 @@ class ClaudeExecutor
                         continue;
                     }
 
+                    // Handle user messages (track UUID)
+                    if ($parsed['type'] === MessageTypes::TYPE_USER) {
+                        $uuid = $parsed['uuid'] ?? null;
+                        if ($uuid) {
+                            $session->setLastMessageUuid($uuid);
+                        }
+                        yield $parsed;
+                        continue;
+                    }
+
+                    // Handle final result
                     if ($parsed['type'] === MessageTypes::TYPE_RESULT) {
+                        // Store cost and duration
+                        $session->setResultMetrics(
+                            $parsed['cost_usd'] ?? null,
+                            $parsed['duration_ms'] ?? null
+                        );
+
                         yield $parsed;
 
                         if (!($parsed['is_error'] ?? false)) {
@@ -271,8 +340,15 @@ class ClaudeExecutor
                     yield $parsed;
                 }
 
+                // Handle interrupt
                 if ($this->interrupted) {
-                    $interruptMsg = json_encode(['type' => 'interrupt']) . "\n";
+                    $interruptMsg = json_encode([
+                        'type' => 'control_request',
+                        'request_id' => uniqid('int_'),
+                        'request' => [
+                            'subtype' => 'interrupt',
+                        ],
+                    ]) . "\n";
                     fwrite($stdin, $interruptMsg);
                     fflush($stdin);
                     $this->interrupted = false;
@@ -300,8 +376,49 @@ class ClaudeExecutor
     }
 
     /**
+     * Build initialize request with hooks configuration.
+     */
+    private function buildInitializeRequest(): string
+    {
+        $hooks = new \stdClass();
+
+        // Add PreToolUse hooks for permission control if not bypassing
+        if ($this->permissionMode !== 'bypassPermissions') {
+            $hooks->PreToolUse = [
+                [
+                    'matcher' => '^(?!(Glob|Grep|Read|Task)$).*',
+                    'hookCallbackIds' => ['tool_approval'],
+                ],
+            ];
+        }
+
+        return json_encode([
+            'type' => 'control_request',
+            'request_id' => uniqid('init_'),
+            'request' => [
+                'subtype' => 'initialize',
+                'hooks' => $hooks,
+            ],
+        ]) . "\n";
+    }
+
+    /**
+     * Build set permission mode request.
+     */
+    private function buildSetPermissionModeRequest(): string
+    {
+        return json_encode([
+            'type' => 'control_request',
+            'request_id' => uniqid('perm_'),
+            'request' => [
+                'subtype' => 'set_permission_mode',
+                'mode' => $this->permissionMode,
+            ],
+        ]) . "\n";
+    }
+
+    /**
      * Check if a Bash command contains dangerous patterns.
-     * Returns the matched pattern if dangerous, null otherwise.
      */
     private function isDangerousCommand(string $command): ?string
     {
@@ -350,10 +467,12 @@ class ClaudeExecutor
         $tool = $request['tool'] ?? null;
         $input = $request['input'] ?? [];
 
+        // Handle hook callbacks
         if ($requestType === 'hook_callback') {
             return $this->handleHookCallback($request, $stdin);
         }
 
+        // Safety checks for Bash commands
         if ($tool === 'Bash' && isset($input['command'])) {
             $command = $input['command'];
             $dangerousPattern = $this->isDangerousCommand($command);
@@ -364,17 +483,7 @@ class ClaudeExecutor
                     'pattern' => $dangerousPattern,
                 ]);
 
-                $response = json_encode([
-                    'type' => 'control_response',
-                    'subtype' => 'error',
-                    'request_id' => $requestId,
-                    'response' => [
-                        'behavior' => 'deny',
-                        'message' => 'This command has been blocked for safety reasons. Destructive commands like database wipes, recursive deletions, and system modifications are not allowed.',
-                    ],
-                ]) . "\n";
-                fwrite($stdin, $response);
-                fflush($stdin);
+                $this->sendDenyResponse($stdin, $requestId, 'This command has been blocked for safety reasons.');
 
                 return [
                     'type' => 'permission_denied',
@@ -385,6 +494,7 @@ class ClaudeExecutor
             }
         }
 
+        // Safety checks for file writes
         if (in_array($tool, ['Write', 'Edit']) && isset($input['file_path'])) {
             $filePath = $input['file_path'];
 
@@ -394,17 +504,7 @@ class ClaudeExecutor
                     'tool' => $tool,
                 ]);
 
-                $response = json_encode([
-                    'type' => 'control_response',
-                    'subtype' => 'error',
-                    'request_id' => $requestId,
-                    'response' => [
-                        'behavior' => 'deny',
-                        'message' => "Cannot modify protected file: {$filePath}. This file is protected for safety reasons.",
-                    ],
-                ]) . "\n";
-                fwrite($stdin, $response);
-                fflush($stdin);
+                $this->sendDenyResponse($stdin, $requestId, "Cannot modify protected file: {$filePath}");
 
                 return [
                     'type' => 'permission_denied',
@@ -415,26 +515,16 @@ class ClaudeExecutor
             }
         }
 
+        // Auto-approve logic
         $readOnlyTools = ['Read', 'Glob', 'Grep', 'LS', 'NotebookRead', 'Task', 'WebFetch', 'WebSearch'];
         $shouldAutoApprove = $tool !== null && (
             in_array($tool, $this->autoApproveTools) ||
             in_array($tool, $readOnlyTools) ||
-            $this->permissionMode === 'bypass' ||
-            $this->permissionMode === 'bypass_permissions'
+            $this->permissionMode === 'bypassPermissions'
         );
 
         if ($shouldAutoApprove) {
-            $response = json_encode([
-                'type' => 'control_response',
-                'subtype' => 'success',
-                'request_id' => $requestId,
-                'response' => [
-                    'behavior' => 'allow',
-                    'updatedInput' => $input,
-                ],
-            ]) . "\n";
-            fwrite($stdin, $response);
-            fflush($stdin);
+            $this->sendAllowResponse($stdin, $requestId, $input);
 
             return [
                 'type' => 'permission_auto_approved',
@@ -460,15 +550,18 @@ class ClaudeExecutor
         $requestId = $request['request_id'];
         $callbackId = $request['raw_request']['callback_id'] ?? 'unknown';
 
+        // Auto-approve hooks in bypass mode
         $response = json_encode([
             'type' => 'control_response',
-            'subtype' => 'success',
-            'request_id' => $requestId,
             'response' => [
-                'hookSpecificOutput' => [
-                    'hookEventName' => 'PreToolUse',
-                    'permissionDecision' => 'allow',
-                    'permissionDecisionReason' => 'Auto-approved by SDK',
+                'subtype' => 'success',
+                'request_id' => $requestId,
+                'response' => [
+                    'hookSpecificOutput' => [
+                        'hookEventName' => 'PreToolUse',
+                        'permissionDecision' => 'allow',
+                        'permissionDecisionReason' => 'Auto-approved by SDK',
+                    ],
                 ],
             ],
         ]) . "\n";
@@ -480,6 +573,46 @@ class ClaudeExecutor
             'request_id' => $requestId,
             'callback_id' => $callbackId,
         ];
+    }
+
+    /**
+     * Send allow response for permission request.
+     */
+    private function sendAllowResponse($stdin, string $requestId, array $input): void
+    {
+        $response = json_encode([
+            'type' => 'control_response',
+            'response' => [
+                'subtype' => 'success',
+                'request_id' => $requestId,
+                'response' => [
+                    'behavior' => 'allow',
+                    'updatedInput' => $input,
+                ],
+            ],
+        ]) . "\n";
+        fwrite($stdin, $response);
+        fflush($stdin);
+    }
+
+    /**
+     * Send deny response for permission request.
+     */
+    private function sendDenyResponse($stdin, string $requestId, string $message): void
+    {
+        $response = json_encode([
+            'type' => 'control_response',
+            'response' => [
+                'subtype' => 'success',
+                'request_id' => $requestId,
+                'response' => [
+                    'behavior' => 'deny',
+                    'message' => $message,
+                ],
+            ],
+        ]) . "\n";
+        fwrite($stdin, $response);
+        fflush($stdin);
     }
 
     /**
@@ -499,8 +632,21 @@ class ClaudeExecutor
             $command[] = $flag;
         }
 
+        // Add permission prompt tool for bidirectional protocol
         $command[] = '--permission-prompt-tool=stdio';
-        $command[] = '--permission-mode=bypassPermissions';
+        $command[] = '--permission-mode=' . $this->permissionMode;
+
+        // Add resume flag if we have a session to resume
+        if (!empty($this->resumeSessionId)) {
+            $command[] = '--resume';
+            $command[] = $this->resumeSessionId;
+
+            // If we want to reset to a specific message
+            if (!empty($this->resumeMessageUuid)) {
+                $command[] = '--resume-session-at';
+                $command[] = $this->resumeMessageUuid;
+            }
+        }
 
         $disallowed = config('claude.disallowed_tools');
         if (!empty($disallowed)) {
@@ -528,15 +674,34 @@ class ClaudeExecutor
         $env = getenv();
         $env['NPM_CONFIG_LOGLEVEL'] = 'error';
 
+        // Ensure HOME is set correctly for Claude's OAuth authentication
+        if (empty($env['HOME'])) {
+            $env['HOME'] = posix_getpwuid(posix_getuid())['dir'] ?? '/tmp';
+        }
+
+        // Ensure common binary paths are in PATH for PHP's process
+        $home = $env['HOME'];
+        $additionalPaths = [
+            '/opt/homebrew/bin',
+            '/usr/local/bin',
+            '/usr/bin',
+            $home . '/.nvm/versions/node/v20.19.4/bin',
+            $home . '/.local/bin',
+        ];
+
+        $currentPath = $env['PATH'] ?? '/usr/bin:/bin';
+        $env['PATH'] = implode(':', array_filter($additionalPaths)) . ':' . $currentPath;
+
+        \Log::debug('[Claude] Environment', [
+            'HOME' => $env['HOME'],
+            'PATH' => substr($env['PATH'], 0, 200) . '...',
+        ]);
+
         return $env;
     }
 
     /**
      * Build message content, including images if present.
-     *
-     * @param string $prompt The text prompt
-     * @param array $images Array of images with 'data' (base64) and 'mediaType' keys
-     * @return string|array String if no images, array of content blocks if images present
      */
     private function buildMessageContent(string $prompt, array $images): string|array
     {
@@ -544,7 +709,6 @@ class ClaudeExecutor
             return $prompt;
         }
 
-        // Build content array with images first, then text
         $content = [];
 
         foreach ($images as $image) {
@@ -558,7 +722,6 @@ class ClaudeExecutor
             ];
         }
 
-        // Add text content
         if (!empty($prompt)) {
             $content[] = [
                 'type' => 'text',
@@ -583,7 +746,7 @@ class ClaudeExecutor
     public function cancel(): bool
     {
         if ($this->process && $this->process->isRunning()) {
-            $this->process->signal(15); // SIGTERM
+            $this->process->signal(15);
             return true;
         }
 

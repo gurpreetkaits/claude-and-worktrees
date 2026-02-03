@@ -23,8 +23,12 @@ class WebSocketStreamService
     /**
      * Start a WebSocket streaming session for a todo.
      * Events are broadcast via Laravel Broadcasting instead of SSE.
+     *
+     * @param Todo $todo The todo to stream in
+     * @param string $content The user's message content
+     * @param array $images Array of images with 'data' (base64) and 'mediaType' keys
      */
-    public function stream(Todo $todo, string $content): void
+    public function stream(Todo $todo, string $content, array $images = []): void
     {
         // Apply message prefix/suffix if set
         $processedContent = $this->applyMessageTransforms($todo, $content);
@@ -101,7 +105,7 @@ class WebSocketStreamService
         ]);
 
         try {
-            foreach ($executor->execute($workingDirectory, $processedContent, $session, $todo->model ?? 'sonnet') as $event) {
+            foreach ($executor->execute($workingDirectory, $processedContent, $session, $todo->model ?? 'sonnet', $images) as $event) {
                 $this->processAndBroadcast($todo->id, $event, $assistantMessage, $fullContent);
             }
 

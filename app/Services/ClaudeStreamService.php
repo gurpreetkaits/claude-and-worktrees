@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Todo;
 use App\Models\ClaudeSession;
 use App\Models\Message;
+use App\Models\QueuedMessage;
 use App\Services\Claude\ClaudeExecutor;
 use App\Services\Claude\MessageTypes;
 use Generator;
@@ -123,6 +124,20 @@ class ClaudeStreamService
             'WebFetch', 'WebSearch', 'Task', 'TodoRead', 'TodoWrite',
         ]);
 
+        // Check for previous completed session to resume
+        $previousSession = ClaudeSession::getLatestResumableForTodo($todo->id);
+        if ($previousSession && $previousSession->claude_session_id) {
+            \Log::info('[SSE] Resuming from previous session', [
+                'todo_id' => $todo->id,
+                'claude_session_id' => $previousSession->claude_session_id,
+            ]);
+            $this->executor->setResumeSession($previousSession->claude_session_id);
+
+            yield $this->sseEvent('session_resumed', [
+                'previous_session_id' => $previousSession->claude_session_id,
+            ]);
+        }
+
         // Build system prompt with project context
         $systemPrompt = $this->buildSystemPrompt($todo);
         if (!empty($systemPrompt)) {
@@ -145,6 +160,9 @@ class ClaudeStreamService
 
             yield $this->sseEvent('complete', [
                 'message' => $assistantMessage->fresh()->toArray(),
+                'session_id' => $session->claude_session_id,
+                'cost_usd' => $session->cost_usd,
+                'duration_ms' => $session->duration_ms,
             ]);
 
             // Only mark as completed if not already marked
@@ -155,6 +173,13 @@ class ClaudeStreamService
                 $completedHookResults = $this->hookExecutor->executeHooks('task_completed', $todo);
                 foreach ($completedHookResults as $result) {
                     yield $this->sseEvent('hook_executed', $result);
+                }
+
+                // Check for queued messages and notify frontend
+                if (QueuedMessage::hasPendingForTodo($todo)) {
+                    yield $this->sseEvent('queued_message_pending', [
+                        'todo_id' => $todo->id,
+                    ]);
                 }
             }
         } catch (\Throwable $e) {

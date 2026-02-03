@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ClaudeStreamController extends Controller
 {
     public function __construct(
-        private ClaudeStreamService $streamService
+        private ClaudeProcessService $processService
     ) {}
 
     /**
@@ -25,12 +25,16 @@ class ClaudeStreamController extends Controller
     {
         $request->validate([
             'message' => 'required|string|max:100000',
+            'images' => 'array|max:10',
+            'images.*.data' => 'required_with:images|string',
+            'images.*.mediaType' => 'required_with:images|string|in:image/png,image/jpeg,image/gif,image/webp',
         ]);
 
         $message = $request->input('message');
+        $images = $request->input('images', []);
 
         // Dispatch the streaming job to run in the background
-        ProcessClaudeStream::dispatch($todo, $message);
+        ProcessClaudeStream::dispatch($todo, $message, $images);
 
         return response()->json([
             'success' => true,
@@ -55,11 +59,17 @@ class ClaudeStreamController extends Controller
         $message = $request->input('message');
         $images = $request->input('images', []);
 
-        $response = new StreamedResponse(function () use ($todo, $message, $images) {
-            // Release session lock so other requests can proceed
-            if (session_status() === PHP_SESSION_ACTIVE) {
-                session_write_close();
-            }
+        // CRITICAL: Release session lock BEFORE creating the response
+        // This allows other requests to proceed in parallel
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        // Create a NEW stream service instance for each request to ensure isolation
+        // This allows multiple streams to run in parallel without shared state
+        $streamService = app()->make(ClaudeStreamService::class);
+
+        $response = new StreamedResponse(function () use ($todo, $message, $images, $streamService) {
 
             // Remove PHP execution time limit
             set_time_limit(0);
@@ -81,7 +91,7 @@ class ClaudeStreamController extends Controller
             echo "event: connected\ndata: {}\n\n";
             flush();
 
-            foreach ($this->streamService->stream($todo, $message, $images) as $event) {
+            foreach ($streamService->stream($todo, $message, $images) as $event) {
                 echo $event;
                 flush();
 

@@ -89,21 +89,21 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
         <div className="h-full flex bg-[#1a1a1a]">
             {/* Terminal Sidebar - collapsible */}
             {showSidebar && (
-                <div className="w-48 flex flex-col bg-base-200 border-r border-base-300 shrink-0">
+                <div className="w-48 flex flex-col bg-gray-800 border-r border-gray-700 shrink-0">
                     {/* Sidebar Header */}
-                    <div className="h-10 flex items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-wider text-base-content/60 shrink-0 border-b border-base-300">
+                    <div className="h-10 flex items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 shrink-0 border-b border-gray-700">
                         <span>Terminals</span>
                         <div className="flex items-center gap-1">
                             <button
                                 onClick={handleNewTerminal}
-                                className="btn btn-ghost btn-xs btn-square hover:bg-base-300"
+                                className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded transition-colors"
                                 title="New Terminal"
                             >
                                 <PlusIcon className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={() => setShowSidebar(false)}
-                                className="btn btn-ghost btn-xs btn-square hover:bg-base-300"
+                                className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded transition-colors"
                                 title="Hide Sidebar"
                             >
                                 <XIcon className="w-3.5 h-3.5" />
@@ -118,21 +118,21 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
                                 key={info.id}
                                 className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
                                     info.id === activeTerminalId
-                                        ? 'bg-base-100 border-l-2 border-primary'
-                                        : 'hover:bg-base-100/50 border-l-2 border-transparent'
+                                        ? 'bg-gray-700 border-l-2 border-gray-400'
+                                        : 'hover:bg-gray-700/50 border-l-2 border-transparent'
                                 }`}
                                 onClick={() => setActiveTerminal(info.id)}
                             >
                                 {/* Status indicator */}
                                 <div className="shrink-0">
                                     {info.isConnecting ? (
-                                        <span className="loading loading-spinner loading-xs text-primary" />
+                                        <span className="w-3 h-3 border-2 border-gray-500 border-t-gray-300 rounded-full animate-spin inline-block" />
                                     ) : info.isConnected ? (
-                                        <span className="w-2 h-2 rounded-full bg-success inline-block" />
+                                        <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
                                     ) : info.error ? (
-                                        <span className="w-2 h-2 rounded-full bg-error inline-block" />
+                                        <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
                                     ) : (
-                                        <TerminalIcon className="w-3.5 h-3.5 text-base-content/40" />
+                                        <TerminalIcon className="w-3.5 h-3.5 text-gray-500" />
                                     )}
                                 </div>
 
@@ -152,12 +152,12 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
                                                     setEditingName('');
                                                 }
                                             }}
-                                            className="w-full bg-base-100 border border-primary rounded px-1 py-0.5 text-xs focus:outline-none"
+                                            className="w-full bg-gray-700 border border-gray-500 rounded px-1 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
                                             onClick={(e) => e.stopPropagation()}
                                         />
                                     ) : (
                                         <span
-                                            className="text-xs truncate block"
+                                            className="text-xs truncate block text-gray-300"
                                             onDoubleClick={(e) => {
                                                 e.stopPropagation();
                                                 startEditing(info.id, info.name);
@@ -177,7 +177,7 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
                                                 e.stopPropagation();
                                                 startEditing(info.id, info.name);
                                             }}
-                                            className="btn btn-ghost btn-xs btn-square"
+                                            className="p-1 text-gray-400 hover:text-gray-200 rounded transition-colors"
                                             title="Rename"
                                         >
                                             <EditIcon className="w-3 h-3" />
@@ -189,7 +189,7 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
                                                 e.stopPropagation();
                                                 handleCloseTerminal(info.id);
                                             }}
-                                            className="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
+                                            className="p-1 text-red-400 hover:text-red-300 rounded transition-colors"
                                             title="Close Terminal"
                                         >
                                             <XIcon className="w-3 h-3" />
@@ -205,12 +205,12 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
             {/* Terminal Content */}
             <div className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <div className="h-10 flex items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-base-content/60 shrink-0 border-b border-base-300 bg-base-200">
+                <div className="h-10 flex items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-gray-400 shrink-0 border-b border-gray-700 bg-gray-800">
                     <div className="flex items-center gap-2">
                         {!showSidebar && terminalInfos.length > 1 && (
                             <button
                                 onClick={() => setShowSidebar(true)}
-                                className="btn btn-ghost btn-xs btn-square"
+                                className="p-1 text-gray-400 hover:text-gray-200 rounded transition-colors"
                                 title="Show Terminals"
                             >
                                 <ChevronRightIcon className="w-3.5 h-3.5" />
@@ -218,23 +218,23 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
                         )}
                         <span>Terminal</span>
                         {activeInfo?.isConnected && (
-                            <span className="w-2 h-2 rounded-full bg-success" title="Connected" />
+                            <span className="w-2 h-2 rounded-full bg-green-500" title="Connected" />
                         )}
                         {activeInfo?.isConnecting && (
-                            <span className="loading loading-spinner loading-xs text-primary" />
+                            <span className="w-3 h-3 border-2 border-gray-500 border-t-gray-300 rounded-full animate-spin inline-block" />
                         )}
                     </div>
                     <div className="flex items-center gap-1">
                         <button
                             onClick={handleNewTerminal}
-                            className="btn btn-ghost btn-xs btn-square"
+                            className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded transition-colors"
                             title="New Terminal"
                         >
                             <PlusIcon className="w-3.5 h-3.5" />
                         </button>
                         <button
                             onClick={handleReconnect}
-                            className="btn btn-ghost btn-xs btn-square"
+                            className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded transition-colors"
                             title="Reconnect"
                         >
                             <RefreshIcon className="w-3.5 h-3.5" />
@@ -244,13 +244,13 @@ export function TerminalPanel({ todoId, workingDirectory }: TerminalPanelProps) 
 
                 {/* Error message */}
                 {activeInfo?.error && (
-                    <div className="px-4 py-3 bg-error/10 border-b border-error/20">
-                        <p className="text-xs text-error">{activeInfo.error}</p>
-                        <p className="text-xs text-base-content/60 mt-1">
-                            Restart with <code className="bg-base-300 px-1 rounded">npm run dev</code> (includes terminal server)
+                    <div className="px-4 py-3 bg-red-900/20 border-b border-red-800/30">
+                        <p className="text-xs text-red-400">{activeInfo.error}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                            Restart with <code className="bg-gray-700 px-1 rounded">npm run dev</code> (includes terminal server)
                         </p>
-                        <p className="text-xs text-base-content/60 mt-0.5">
-                            Or run separately: <code className="bg-base-300 px-1 rounded">npm run terminal</code>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            Or run separately: <code className="bg-gray-700 px-1 rounded">npm run terminal</code>
                         </p>
                     </div>
                 )}

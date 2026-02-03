@@ -8,6 +8,13 @@ use Illuminate\Http\Request;
 
 class MessageController extends Controller
 {
+    public function index(Todo $todo)
+    {
+        $messages = $todo->messages()->orderBy('created_at', 'asc')->get();
+
+        return response()->json(['messages' => $messages]);
+    }
+
     public function store(Request $request, Todo $todo)
     {
         $validated = $request->validate([

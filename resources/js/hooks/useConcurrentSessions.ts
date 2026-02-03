@@ -241,7 +241,7 @@ class ConcurrentSessionManager {
             hooks: [],
         });
 
-        // Check if WebSocket is available
+        // Use WebSocket when available for parallel processing support
         const useWebSocket = isWebSocketAvailable();
         console.log(`[SessionManager] Sending message via ${useWebSocket ? 'WebSocket' : 'SSE'}`);
 
@@ -253,30 +253,48 @@ class ConcurrentSessionManager {
     }
 
     // Subscribe to WebSocket channel for a todo
-    private subscribeToChannel(todoId: number): void {
-        if (this.wsChannels.has(todoId)) {
-            return; // Already subscribed
-        }
+    private subscribeToChannel(todoId: number): Promise<void> {
+        return new Promise((resolve) => {
+            if (this.wsChannels.has(todoId)) {
+                resolve(); // Already subscribed
+                return;
+            }
 
-        if (!window.Echo) {
-            console.warn('[SessionManager] Echo not available for WebSocket');
-            return;
-        }
+            if (!window.Echo) {
+                console.warn('[SessionManager] Echo not available for WebSocket');
+                resolve();
+                return;
+            }
 
-        const channelName = `claude.todo.${todoId}`;
-        console.log(`[SessionManager] Subscribing to WebSocket channel: ${channelName}`);
+            const channelName = `claude.todo.${todoId}`;
+            console.log(`[SessionManager] Subscribing to WebSocket channel: ${channelName}`);
 
-        const channel = window.Echo.channel(channelName);
+            const channel = window.Echo.channel(channelName);
 
-        // Listen to all Claude events
-        CLAUDE_EVENTS.forEach((event) => {
-            channel.listen(`.${event}`, (data: Record<string, unknown>) => {
-                console.log(`[SessionManager] WS event ${event}:`, data);
-                this.handleEvent(todoId, event, data);
+            // Listen to all Claude events
+            CLAUDE_EVENTS.forEach((event) => {
+                channel.listen(`.${event}`, (data: Record<string, unknown>) => {
+                    console.log(`[SessionManager] WS event ${event}:`, data);
+                    this.handleEvent(todoId, event, data);
+                });
             });
-        });
 
-        this.wsChannels.set(todoId, channel);
+            this.wsChannels.set(todoId, channel);
+
+            // Wait for subscription to be established
+            // Pusher/Echo channels emit 'pusher:subscription_succeeded' when ready
+            if (channel.pusher?.subscriptionPending) {
+                channel.pusher.bind('pusher:subscription_succeeded', () => {
+                    console.log(`[SessionManager] Channel ${channelName} subscribed`);
+                    resolve();
+                });
+                // Timeout fallback
+                setTimeout(resolve, 500);
+            } else {
+                // Already subscribed or subscription immediate
+                setTimeout(resolve, 100); // Small delay to ensure listeners are ready
+            }
+        });
     }
 
     // Unsubscribe from WebSocket channel
@@ -290,8 +308,8 @@ class ConcurrentSessionManager {
 
     // Send message via WebSocket (dispatches job, receives events via Echo)
     private async sendViaWebSocket(todoId: number, content: string, images?: MessageImage[]): Promise<void> {
-        // Subscribe to channel before sending
-        this.subscribeToChannel(todoId);
+        // Subscribe to channel and wait for it to be ready before sending
+        await this.subscribeToChannel(todoId);
 
         const streamUrl = route('claude.stream.ws', todoId);
 

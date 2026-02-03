@@ -3,7 +3,9 @@
 use App\Http\Controllers\ClaudeStreamController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FileSystemController;
+use App\Http\Controllers\McpServerController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\QueuedMessageController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TerminalController;
 use App\Http\Controllers\TodoController;
@@ -42,15 +44,32 @@ Route::post('/todos/{todo}/duplicate', [TodoController::class, 'duplicate'])->na
 Route::post('/todos/reorder', [TodoController::class, 'reorder'])->name('todos.reorder');
 
 // Messages
+Route::get('/todos/{todo}/messages', [MessageController::class, 'index'])->name('messages.index');
 Route::post('/todos/{todo}/messages', [MessageController::class, 'store'])->name('messages.store');
 Route::post('/todos/{todo}/messages/assistant', [MessageController::class, 'storeAssistant'])->name('messages.storeAssistant');
 Route::delete('/messages/{message}', [MessageController::class, 'destroy'])->name('messages.destroy');
 
-// Claude Streaming
-Route::post('/todos/{todo}/stream', [ClaudeStreamController::class, 'stream'])->name('claude.stream');
-Route::post('/todos/{todo}/stream/ws', [ClaudeStreamController::class, 'streamWebSocket'])->name('claude.stream.ws');
-Route::post('/sessions/{session}/cancel', [ClaudeStreamController::class, 'cancel'])->name('claude.cancel');
-Route::get('/sessions/{session}/status', [ClaudeStreamController::class, 'status'])->name('claude.status');
+// Claude Streaming - exclude from session middleware to enable parallel execution
+// PHP's file-based sessions use locking which blocks concurrent requests from the same user
+// We need to exclude StartSession, ShareErrorsFromSession (which depends on sessions),
+// and VerifyCsrfToken (which tries to add CSRF cookie requiring session access)
+$sessionMiddleware = [
+    \Illuminate\Session\Middleware\StartSession::class,
+    \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+    \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+];
+Route::post('/todos/{todo}/stream', [ClaudeStreamController::class, 'stream'])
+    ->name('claude.stream')
+    ->withoutMiddleware($sessionMiddleware);
+Route::post('/todos/{todo}/stream/ws', [ClaudeStreamController::class, 'streamWebSocket'])
+    ->name('claude.stream.ws')
+    ->withoutMiddleware($sessionMiddleware);
+Route::post('/sessions/{session}/cancel', [ClaudeStreamController::class, 'cancel'])
+    ->name('claude.cancel')
+    ->withoutMiddleware($sessionMiddleware);
+Route::get('/sessions/{session}/status', [ClaudeStreamController::class, 'status'])
+    ->name('claude.status')
+    ->withoutMiddleware($sessionMiddleware);
 
 // Settings
 Route::get('/api/settings', [SettingsController::class, 'show'])->name('settings.show');
@@ -58,3 +77,22 @@ Route::patch('/api/settings', [SettingsController::class, 'update'])->name('sett
 
 // Terminal
 Route::post('/api/terminal/execute', [TerminalController::class, 'execute'])->name('terminal.execute');
+
+// MCP Servers
+Route::prefix('api/mcp-servers')->group(function () {
+    Route::get('/', [McpServerController::class, 'index'])->name('mcp-servers.index');
+    Route::post('/', [McpServerController::class, 'store'])->name('mcp-servers.store');
+    Route::patch('/{mcpServer}', [McpServerController::class, 'update'])->name('mcp-servers.update');
+    Route::delete('/{mcpServer}', [McpServerController::class, 'destroy'])->name('mcp-servers.destroy');
+    Route::post('/{mcpServer}/toggle', [McpServerController::class, 'toggle'])->name('mcp-servers.toggle');
+    Route::get('/config', [McpServerController::class, 'getClaudeConfig'])->name('mcp-servers.config');
+    Route::post('/sync', [McpServerController::class, 'sync'])->name('mcp-servers.sync');
+});
+
+// Queued Messages
+Route::prefix('todos/{todo}/queue')->group(function () {
+    Route::get('/', [QueuedMessageController::class, 'index'])->name('queue.index');
+    Route::post('/', [QueuedMessageController::class, 'store'])->name('queue.store');
+    Route::get('/status', [QueuedMessageController::class, 'status'])->name('queue.status');
+});
+Route::delete('/queued-messages/{queuedMessage}', [QueuedMessageController::class, 'destroy'])->name('queue.destroy');

@@ -17,7 +17,7 @@ class ProcessClaudeStream implements ShouldQueue
     /**
      * The number of times the job may be attempted.
      */
-    public int $tries = 1;
+    public int $tries = 3;
 
     /**
      * The maximum number of seconds the job can run.
@@ -26,10 +26,15 @@ class ProcessClaudeStream implements ShouldQueue
 
     /**
      * Create a new job instance.
+     *
+     * @param Todo $todo The todo to stream in
+     * @param string $message The user's message content
+     * @param array $images Array of images with 'data' (base64) and 'mediaType' keys
      */
     public function __construct(
         public Todo $todo,
-        public string $message
+        public string $message,
+        public array $images = []
     ) {}
 
     /**
@@ -37,7 +42,18 @@ class ProcessClaudeStream implements ShouldQueue
      */
     public function handle(WebSocketStreamService $streamService): void
     {
-        $streamService->stream($this->todo, $this->message);
+        \Log::info("[ProcessClaudeStream] Starting job for todo {$this->todo->id}");
+
+        try {
+            $streamService->stream($this->todo, $this->message, $this->images);
+            \Log::info("[ProcessClaudeStream] Completed job for todo {$this->todo->id}");
+        } catch (\Throwable $e) {
+            \Log::error("[ProcessClaudeStream] Job failed for todo {$this->todo->id}: " . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 
     /**

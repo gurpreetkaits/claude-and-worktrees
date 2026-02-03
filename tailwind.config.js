@@ -11,10 +11,14 @@ export default {
         './resources/js/**/*.tsx',
     ],
 
+    // Use class-based dark mode (toggled via 'dark' class on html element)
+    darkMode: 'class',
+
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', 'Figtree', ...defaultTheme.fontFamily.sans],
+                mono: ['JetBrains Mono', ...defaultTheme.fontFamily.mono],
             },
         },
     },
@@ -25,40 +29,48 @@ export default {
         themes: [
             {
                 light: {
-                    "primary": "#e67e22",
+                    "primary": "#4b5563",           // gray-600
                     "primary-content": "#ffffff",
-                    "secondary": "#3498db",
+                    "secondary": "#6b7280",         // gray-500
                     "secondary-content": "#ffffff",
-                    "accent": "#9b59b6",
+                    "accent": "#f97316",            // orange-500 for accents
                     "accent-content": "#ffffff",
-                    "neutral": "#2c3e50",
-                    "neutral-content": "#ffffff",
-                    "base-100": "#ffffff",
-                    "base-200": "#f5f5f5",
-                    "base-300": "#e0e0e0",
-                    "base-content": "#1a1a1a",
-                    "info": "#3498db",
-                    "success": "#27ae60",
-                    "warning": "#f39c12",
-                    "error": "#e74c3c",
+                    "neutral": "#111827",           // gray-900
+                    "neutral-content": "#f9fafb",   // gray-50
+                    "base-100": "#ffffff",          // white
+                    "base-200": "#f9fafb",          // gray-50
+                    "base-300": "#f3f4f6",          // gray-100
+                    "base-content": "#111827",      // gray-900
+                    "info": "#3b82f6",              // blue-500
+                    "info-content": "#ffffff",
+                    "success": "#22c55e",           // green-500
+                    "success-content": "#ffffff",
+                    "warning": "#f59e0b",           // amber-500
+                    "warning-content": "#ffffff",
+                    "error": "#ef4444",             // red-500
+                    "error-content": "#ffffff",
                 },
                 dark: {
-                    "primary": "#e67e22",
-                    "primary-content": "#ffffff",
-                    "secondary": "#3498db",
+                    "primary": "#9ca3af",           // gray-400
+                    "primary-content": "#111827",
+                    "secondary": "#6b7280",         // gray-500
                     "secondary-content": "#ffffff",
-                    "accent": "#9b59b6",
+                    "accent": "#f97316",            // orange-500
                     "accent-content": "#ffffff",
-                    "neutral": "#1a1a1a",
-                    "neutral-content": "#ffffff",
-                    "base-100": "#212121",
-                    "base-200": "#1a1a1a",
-                    "base-300": "#2d2d2d",
-                    "base-content": "#f5f5f5",
-                    "info": "#3498db",
-                    "success": "#27ae60",
-                    "warning": "#f39c12",
-                    "error": "#e74c3c",
+                    "neutral": "#f9fafb",           // gray-50
+                    "neutral-content": "#111827",
+                    "base-100": "#111827",          // gray-900
+                    "base-200": "#1f2937",          // gray-800
+                    "base-300": "#374151",          // gray-700
+                    "base-content": "#f9fafb",      // gray-50
+                    "info": "#3b82f6",
+                    "info-content": "#ffffff",
+                    "success": "#22c55e",
+                    "success-content": "#ffffff",
+                    "warning": "#f59e0b",
+                    "warning-content": "#ffffff",
+                    "error": "#ef4444",
+                    "error-content": "#ffffff",
                 },
             },
         ],

@@ -74,9 +74,9 @@ export function useTaskSwitcher({
             return cached.messages;
         }
 
-        // Fetch from server
+        // Fetch from server using the messages API endpoint
         try {
-            const response = await fetch(route('todos.show', todoId), {
+            const response = await fetch(route('messages.index', todoId), {
                 headers: {
                     Accept: 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
@@ -88,7 +88,7 @@ export function useTaskSwitcher({
             }
 
             const data = await response.json();
-            const loadedMessages = data.messages ?? data.todo?.messages ?? [];
+            const loadedMessages = data.messages ?? [];
 
             // Update cache
             cacheRef.current.set(todoId, {

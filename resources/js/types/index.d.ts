@@ -130,6 +130,32 @@ export interface UserSettings {
     updated_at: string;
 }
 
+export interface McpServer {
+    id: number;
+    name: string;
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+    enabled: boolean;
+    type?: 'stdio' | 'http';
+    url?: string;
+    headers?: Record<string, string>;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface QueuedMessage {
+    id: number;
+    todo_id: number;
+    content: string;
+    images: Array<{ data: string; mediaType: string }>;
+    status: 'pending' | 'processing' | 'completed' | 'cancelled';
+    queued_at: string;
+    processed_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 export type PageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {};
