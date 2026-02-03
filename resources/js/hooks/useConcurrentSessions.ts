@@ -1,6 +1,14 @@
 import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
 import { Message } from '@/types';
 
+// Check if WebSocket (Echo) is available and connected
+function isWebSocketAvailable(): boolean {
+    if (!window.Echo?.connector?.pusher?.connection) {
+        return false;
+    }
+    return window.Echo.connector.pusher.connection.state === 'connected';
+}
+
 // Play notification sound when any session completes
 function playNotificationSound() {
     try {
@@ -123,13 +131,42 @@ const initialSessionState: SessionState = {
 type SessionListener = (todoId: number, session: SessionState) => void;
 type RunningListener = (running: number[]) => void;
 
-// Global session manager
+// All event types that Claude can emit via WebSocket
+const CLAUDE_EVENTS = [
+    'user_message',
+    'session_started',
+    'session_resumed',
+    'system',
+    'assistant_message_created',
+    'text_delta',
+    'thinking',
+    'tool_use',
+    'tool_result',
+    'permission_request',
+    'permission_approved',
+    'permission_denied',
+    'result',
+    'complete',
+    'error',
+    'debug',
+    'pre_command_start',
+    'pre_command_result',
+    'post_command_start',
+    'post_command_result',
+    'hook_executed',
+    'queued_message_pending',
+];
+
+// Global session manager with WebSocket + SSE support
 class ConcurrentSessionManager {
     private sessions: Map<number, SessionState> = new Map();
     private abortControllers: Map<number, AbortController> = new Map();
     private sessionListeners: Map<number, Set<SessionListener>> = new Map();
     private runningListeners: Set<RunningListener> = new Set();
     private version = 0;
+
+    // WebSocket channel subscriptions
+    private wsChannels: Map<number, ReturnType<typeof window.Echo.channel>> = new Map();
 
     getSession(todoId: number): SessionState {
         return this.sessions.get(todoId) || { ...initialSessionState };
@@ -204,6 +241,86 @@ class ConcurrentSessionManager {
             hooks: [],
         });
 
+        // Check if WebSocket is available
+        const useWebSocket = isWebSocketAvailable();
+        console.log(`[SessionManager] Sending message via ${useWebSocket ? 'WebSocket' : 'SSE'}`);
+
+        if (useWebSocket) {
+            await this.sendViaWebSocket(todoId, content, images);
+        } else {
+            await this.sendViaSSE(todoId, content, images);
+        }
+    }
+
+    // Subscribe to WebSocket channel for a todo
+    private subscribeToChannel(todoId: number): void {
+        if (this.wsChannels.has(todoId)) {
+            return; // Already subscribed
+        }
+
+        if (!window.Echo) {
+            console.warn('[SessionManager] Echo not available for WebSocket');
+            return;
+        }
+
+        const channelName = `claude.todo.${todoId}`;
+        console.log(`[SessionManager] Subscribing to WebSocket channel: ${channelName}`);
+
+        const channel = window.Echo.channel(channelName);
+
+        // Listen to all Claude events
+        CLAUDE_EVENTS.forEach((event) => {
+            channel.listen(`.${event}`, (data: Record<string, unknown>) => {
+                console.log(`[SessionManager] WS event ${event}:`, data);
+                this.handleEvent(todoId, event, data);
+            });
+        });
+
+        this.wsChannels.set(todoId, channel);
+    }
+
+    // Unsubscribe from WebSocket channel
+    private unsubscribeFromChannel(todoId: number): void {
+        if (window.Echo && this.wsChannels.has(todoId)) {
+            window.Echo.leave(`claude.todo.${todoId}`);
+            this.wsChannels.delete(todoId);
+            console.log(`[SessionManager] Left WebSocket channel for todo ${todoId}`);
+        }
+    }
+
+    // Send message via WebSocket (dispatches job, receives events via Echo)
+    private async sendViaWebSocket(todoId: number, content: string, images?: MessageImage[]): Promise<void> {
+        // Subscribe to channel before sending
+        this.subscribeToChannel(todoId);
+
+        const streamUrl = route('claude.stream.ws', todoId);
+
+        try {
+            const response = await fetch(streamUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                },
+                body: JSON.stringify({ message: content, images: images || [] }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            // Job dispatched - events will come via WebSocket
+            console.log('[SessionManager] WebSocket job dispatched, awaiting events');
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.updateSession(todoId, { isStreaming: false, error: errorMessage });
+        }
+    }
+
+    // Send message via SSE (traditional streaming)
+    private async sendViaSSE(todoId: number, content: string, images?: MessageImage[]): Promise<void> {
         const abortController = new AbortController();
         this.abortControllers.set(todoId, abortController);
 
@@ -276,7 +393,12 @@ class ConcurrentSessionManager {
             }
         }
 
-        // Check for queued messages
+        // Check for queued messages (SSE only - WebSocket handles via complete event)
+        this.processQueuedMessages(todoId);
+    }
+
+    // Process queued messages after stream completes
+    private processQueuedMessages(todoId: number): void {
         const finalSession = this.getSession(todoId);
         if (finalSession.queuedMessages.length > 0) {
             const [nextMessage, ...remainingMessages] = finalSession.queuedMessages;
@@ -346,6 +468,8 @@ class ConcurrentSessionManager {
                     completionCount: session.completionCount + 1,
                 });
                 playNotificationSound();
+                // Process queued messages for WebSocket mode
+                this.processQueuedMessages(todoId);
                 break;
 
             case 'error':
@@ -426,7 +550,7 @@ class ConcurrentSessionManager {
         const session = this.getSession(todoId);
         const abortController = this.abortControllers.get(todoId);
 
-        // Abort immediately
+        // Abort SSE stream if active
         if (abortController) {
             abortController.abort();
             this.abortControllers.delete(todoId);
@@ -445,6 +569,9 @@ class ConcurrentSessionManager {
                 },
             }).catch(() => {});
         }
+
+        // Note: Keep WebSocket channel subscribed for potential future messages
+        // The channel is lightweight and can receive multiple conversations
     }
 
     queueMessage(todoId: number, content: string, images?: MessageImage[]) {

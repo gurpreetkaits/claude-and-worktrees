@@ -23,7 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 // CommandPalette removed - using inline search instead
 import { NewTaskDialog } from '@/Components/NewTaskDialog';
 import { SettingsDialog } from '@/Components/SettingsDialog';
-import { TodoChat } from '@/Components/TodoChat';
+import { ChatConversation } from '@/Components/chat';
 import { ChangesPanel } from '@/Components/ChangesPanel';
 import { TerminalPanel } from '@/Components/TerminalPanel';
 import { KeyboardShortcutsHelp } from '@/Components/KeyboardShortcutsHelp';
@@ -323,11 +323,11 @@ export default function Dashboard({
 
     // VS Code style Title Bar
     const TitleBar = () => (
-        <div className="h-12 bg-base-200 border-b border-base-300 flex items-center px-4 select-none shrink-0">
+        <div className="h-12 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 select-none shrink-0">
             {/* Left - App icon and menu */}
             <div className="flex items-center gap-2 min-w-[160px]">
-                <BrainIcon className="w-5 h-5 text-primary" />
-                <span className="text-sm font-semibold text-base-content hidden sm:inline">Claude Worktree</span>
+                <BrainIcon className="w-5 h-5 text-orange-500" />
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 hidden sm:inline">Claude Worktree</span>
             </div>
 
             {/* Center - Search input with dropdown */}
@@ -335,7 +335,7 @@ export default function Dashboard({
                 <div className="relative w-full max-w-lg">
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                            <SearchIcon className="w-4 h-4 text-base-content/40" />
+                            <SearchIcon className="w-4 h-4 text-gray-400" />
                         </div>
                         <input
                             ref={searchInputRef}
@@ -348,7 +348,7 @@ export default function Dashboard({
                             onFocus={() => setShowSearchResults(true)}
                             onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
                             placeholder="Search tasks... (⌘K)"
-                            className="input input-bordered w-full pl-10 pr-10 bg-base-100/80 focus:bg-base-100 focus:border-primary border-base-300 rounded-lg h-9 text-sm"
+                            className="w-full pl-10 pr-10 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         />
                         {searchQuery && (
                             <button
@@ -356,7 +356,7 @@ export default function Dashboard({
                                     setSearchQuery('');
                                     setShowSearchResults(false);
                                 }}
-                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-base-content/40 hover:text-base-content"
+                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                             >
                                 <XIcon className="w-4 h-4" />
                             </button>
@@ -365,7 +365,7 @@ export default function Dashboard({
 
                     {/* Search Results Dropdown */}
                     {showSearchResults && searchQuery && searchResults.length > 0 && (
-                        <ul className="absolute left-0 right-0 top-full mt-2 menu bg-base-100 rounded-lg shadow-2xl border border-base-300 p-2 z-[9999] max-h-80 overflow-y-auto">
+                        <ul className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-2 z-[9999] max-h-80 overflow-y-auto">
                             {searchResults.map((todo) => {
                                 const worktree = worktreeById[todo.worktree_id];
                                 const isRunning = runningSessions.includes(todo.id);
@@ -373,20 +373,20 @@ export default function Dashboard({
                                     <li key={todo.id}>
                                         <button
                                             onClick={() => handleSearchResultClick(todo.id)}
-                                            className="flex flex-col items-start gap-1 py-2 px-3 hover:bg-base-200 rounded-md"
+                                            className="w-full flex flex-col items-start gap-1 py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
                                         >
                                             <div className="flex items-center gap-2 w-full">
                                                 {isRunning ? (
-                                                    <span className="loading loading-spinner loading-xs text-primary" />
+                                                    <span className="w-4 h-4 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin flex-shrink-0" />
                                                 ) : todo.status === 'completed' ? (
-                                                    <CheckCircleIcon className="w-4 h-4 text-success flex-shrink-0" />
+                                                    <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
                                                 ) : (
-                                                    <CircleIcon className="w-4 h-4 text-base-content/30 flex-shrink-0" />
+                                                    <CircleIcon className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0" />
                                                 )}
-                                                <span className="font-medium text-sm truncate flex-1 text-left">{todo.title}</span>
+                                                <span className="font-medium text-sm truncate flex-1 text-left text-gray-900 dark:text-gray-100">{todo.title}</span>
                                             </div>
                                             {worktree && (
-                                                <div className="flex items-center gap-2 text-xs text-base-content/50 ml-6">
+                                                <div className="flex items-center gap-2 text-xs text-gray-500 ml-6">
                                                     <span className="flex items-center gap-1">
                                                         <FolderIcon className="w-3 h-3" />
                                                         {worktree.name}
@@ -407,8 +407,8 @@ export default function Dashboard({
                     )}
 
                     {showSearchResults && searchQuery && searchResults.length === 0 && (
-                        <div className="absolute left-0 right-0 top-full mt-2 bg-base-100 rounded-lg shadow-2xl border border-base-300 p-4 z-[9999]">
-                            <p className="text-sm text-base-content/50 text-center">No tasks found</p>
+                        <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-4 z-[9999]">
+                            <p className="text-sm text-gray-500 text-center">No tasks found</p>
                         </div>
                     )}
                 </div>
@@ -417,48 +417,52 @@ export default function Dashboard({
             {/* Right - Action buttons */}
             <div className="flex items-center gap-1 min-w-[160px] justify-end">
                 {/* New Task */}
-                <div className="tooltip tooltip-bottom" data-tip="New Task (N)">
-                    <button
-                        onClick={handleNewTask}
-                        className="btn btn-ghost btn-sm btn-square"
-                    >
-                        <PlusIcon className="w-5 h-5" />
-                    </button>
-                </div>
+                <button
+                    onClick={handleNewTask}
+                    className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                    title="New Task (N)"
+                >
+                    <PlusIcon className="w-5 h-5" />
+                </button>
 
                 {/* Git Changes */}
                 {currentTodo && currentWorktree && (
-                    <div className="tooltip tooltip-bottom" data-tip={rightPanel === 'changes' ? 'Hide Changes' : 'Show Changes'}>
-                        <button
-                            onClick={() => setRightPanel(prev => prev === 'changes' ? null : 'changes')}
-                            className={`btn btn-ghost btn-sm btn-square ${rightPanel === 'changes' ? 'text-primary' : ''}`}
-                        >
-                            <GitDiffIcon className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <button
+                        onClick={() => setRightPanel(prev => prev === 'changes' ? null : 'changes')}
+                        className={`p-2 rounded-lg transition-colors ${
+                            rightPanel === 'changes'
+                                ? 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
+                        }`}
+                        title={rightPanel === 'changes' ? 'Hide Changes' : 'Show Changes'}
+                    >
+                        <GitDiffIcon className="w-5 h-5" />
+                    </button>
                 )}
 
                 {/* Terminal */}
                 {currentTodo && currentWorktree && (
-                    <div className="tooltip tooltip-bottom" data-tip={rightPanel === 'terminal' ? 'Hide Terminal' : 'Show Terminal'}>
-                        <button
-                            onClick={() => setRightPanel(prev => prev === 'terminal' ? null : 'terminal')}
-                            className={`btn btn-ghost btn-sm btn-square ${rightPanel === 'terminal' ? 'text-primary' : ''}`}
-                        >
-                            <TerminalIcon className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <button
+                        onClick={() => setRightPanel(prev => prev === 'terminal' ? null : 'terminal')}
+                        className={`p-2 rounded-lg transition-colors ${
+                            rightPanel === 'terminal'
+                                ? 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
+                        }`}
+                        title={rightPanel === 'terminal' ? 'Hide Terminal' : 'Show Terminal'}
+                    >
+                        <TerminalIcon className="w-5 h-5" />
+                    </button>
                 )}
 
                 {/* Settings */}
-                <div className="tooltip tooltip-bottom" data-tip="Settings (,)">
-                    <button
-                        onClick={() => setShowSettingsDialog(true)}
-                        className="btn btn-ghost btn-sm btn-square"
-                    >
-                        <SettingsIcon className="w-5 h-5" />
-                    </button>
-                </div>
+                <button
+                    onClick={() => setShowSettingsDialog(true)}
+                    className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                    title="Settings (,)"
+                >
+                    <SettingsIcon className="w-5 h-5" />
+                </button>
             </div>
         </div>
     );
@@ -466,7 +470,7 @@ export default function Dashboard({
 
     // VS Code style Status Bar
     const StatusBar = () => (
-        <div className="h-6 bg-primary flex items-center px-3 text-primary-content text-xs shrink-0">
+        <div className="h-6 bg-orange-500 flex items-center px-3 text-white text-xs shrink-0">
             <div className="flex items-center gap-3">
                 {currentTodo && currentWorktree && (
                     <>
@@ -486,7 +490,7 @@ export default function Dashboard({
                 <span>{displayedTodos.length} tasks</span>
                 {runningSessions.length > 0 && (
                     <span className="flex items-center gap-1">
-                        <span className="loading loading-spinner loading-xs" />
+                        <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         {runningSessions.length} running
                     </span>
                 )}
@@ -522,12 +526,12 @@ export default function Dashboard({
                 style={style}
                 className={`group cursor-pointer transition-colors ${
                     isDragging
-                        ? 'bg-base-100 shadow-lg rounded-lg'
+                        ? 'bg-white dark:bg-gray-800 shadow-lg rounded-lg'
                         : isRunning
-                        ? 'bg-primary/5 border-l-2 border-primary'
+                        ? 'bg-orange-50 dark:bg-orange-900/10 border-l-2 border-orange-500'
                         : isActive
-                        ? 'bg-base-100 border-l-2 border-primary'
-                        : 'hover:bg-base-100/50 border-l-2 border-transparent'
+                        ? 'bg-white dark:bg-gray-800 border-l-2 border-orange-500'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-l-2 border-transparent'
                 } ${todo.is_archived ? 'opacity-50' : ''}`}
                 onClick={() => switchToTask(todo.id)}
             >
@@ -536,7 +540,7 @@ export default function Dashboard({
                     <div
                         {...attributes}
                         {...listeners}
-                        className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5 cursor-grab active:cursor-grabbing text-base-content/30 hover:text-base-content/60"
+                        className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <GripVerticalIcon className="w-4 h-4" />
@@ -545,11 +549,11 @@ export default function Dashboard({
                     {/* Status indicator */}
                     <div className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
                         {isRunning ? (
-                            <span className="loading loading-spinner loading-sm text-primary" />
+                            <span className="w-4 h-4 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
                         ) : todo.status === 'completed' ? (
-                            <CheckCircleIcon className="w-4 h-4 text-success" />
+                            <CheckCircleIcon className="w-4 h-4 text-green-500" />
                         ) : (
-                            <CircleIcon className="w-4 h-4 text-base-content/30" />
+                            <CircleIcon className="w-4 h-4 text-gray-300 dark:text-gray-600" />
                         )}
                     </div>
 
@@ -557,16 +561,16 @@ export default function Dashboard({
                     <div className="flex-1 min-w-0">
                         {/* Title row */}
                         <div className="flex items-center gap-2">
-                            <span className={`text-sm truncate ${isActive || isRunning ? 'text-base-content font-medium' : 'text-base-content/80'}`}>
+                            <span className={`text-sm truncate ${isActive || isRunning ? 'text-gray-900 dark:text-gray-100 font-medium' : 'text-gray-700 dark:text-gray-300'}`}>
                                 {todo.title}
                             </span>
                             {isRunning && (
-                                <span className="badge badge-primary badge-xs">
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded">
                                     Running
                                 </span>
                             )}
                             {!isRunning && index < 9 && (
-                                <kbd className="kbd kbd-xs text-base-content/40 shrink-0">
+                                <kbd className="px-1 py-0.5 text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 rounded shrink-0">
                                     {index + 1}
                                 </kbd>
                             )}
@@ -574,14 +578,14 @@ export default function Dashboard({
 
                         {/* Description or Context */}
                         {(todo.description || todo.context) && (
-                            <p className="text-xs text-base-content/50 mt-1 line-clamp-2 leading-relaxed">
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
                                 {todo.description || todo.context}
                             </p>
                         )}
 
                         {/* Worktree info */}
                         {worktree && (
-                            <div className="flex items-center gap-3 mt-2 text-[11px] text-base-content/40">
+                            <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400">
                                 <span className="flex items-center gap-1">
                                     <FolderIcon className="w-3 h-3" />
                                     {worktree.name}
@@ -611,7 +615,7 @@ export default function Dashboard({
                                     setOpenMenuId(todo.id);
                                 }
                             }}
-                            className="btn btn-ghost btn-xs btn-square"
+                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
                             <MoreVerticalIcon className="w-4 h-4" />
                         </button>
@@ -623,15 +627,15 @@ export default function Dashboard({
 
     // VS Code style Sidebar
     const Sidebar = () => (
-        <div className="h-full flex flex-col bg-base-200">
+        <div className="h-full flex flex-col bg-gray-100 dark:bg-gray-800">
             {/* Section Header */}
-            <div className="h-10 flex items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-base-content/60 shrink-0 border-b border-base-300">
+            <div className="h-10 flex items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-gray-500 shrink-0 border-b border-gray-200 dark:border-gray-700">
                 <span>Tasks</span>
                 <div className="flex items-center gap-1">
-                    <span className="badge badge-ghost badge-sm">{displayedTodos.length}</span>
+                    <span className="px-1.5 py-0.5 text-[10px] bg-gray-200 dark:bg-gray-700 text-gray-500 rounded">{displayedTodos.length}</span>
                     <button
                         onClick={handleNewTask}
-                        className="btn btn-ghost btn-xs btn-square hover:bg-base-300"
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                         title="New Task (N)"
                     >
                         <PlusIcon className="w-3.5 h-3.5" />
@@ -643,9 +647,9 @@ export default function Dashboard({
             <div className="flex-1 overflow-y-auto">
                 {displayedTodos.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                        <FolderIcon className="w-10 h-10 text-base-content/20 mb-3" />
-                        <p className="text-sm text-base-content/50">No tasks yet</p>
-                        <p className="text-xs text-base-content/40 mt-1">Press N to create a task</p>
+                        <FolderIcon className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-3" />
+                        <p className="text-sm text-gray-500">No tasks yet</p>
+                        <p className="text-xs text-gray-400 mt-1">Press N to create a task</p>
                     </div>
                 ) : (
                     <DndContext
@@ -657,7 +661,7 @@ export default function Dashboard({
                             items={displayedTodos.map(t => t.id)}
                             strategy={verticalListSortingStrategy}
                         >
-                            <div className="divide-y divide-base-300/50">
+                            <div className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
                                 {displayedTodos.map((todo, index) => (
                                     <SortableTaskCard key={todo.id} todo={todo} index={index} />
                                 ))}
@@ -669,10 +673,10 @@ export default function Dashboard({
 
             {/* Archived toggle */}
             {archivedTodos.length > 0 && (
-                <div className="border-t border-base-300 shrink-0">
+                <div className="border-t border-gray-200 dark:border-gray-700 shrink-0">
                     <button
                         onClick={() => setShowArchived(!showArchived)}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-base-content/50 hover:text-base-content hover:bg-base-100/50 transition-colors"
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
                         <ArchiveIcon className="w-4 h-4" />
                         {showArchived ? 'Hide' : 'Show'} archived ({archivedTodos.length})
@@ -685,13 +689,13 @@ export default function Dashboard({
     // Center panel - either welcome or chat
     const CenterPanel = () => {
         if (currentTodo) {
-            // Merge worktree into todo for TodoChat (without messages - passed separately)
+            // Merge worktree into todo for ChatConversation (without messages - passed separately)
             const todoWithWorktree: Todo = {
                 ...currentTodo,
                 worktree: currentWorktree || undefined,
             };
             return (
-                <TodoChat
+                <ChatConversation
                     todo={todoWithWorktree}
                     messages={cachedMessages}
                     onNewMessage={addMessage}
@@ -701,13 +705,13 @@ export default function Dashboard({
 
         // VS Code style welcome screen
         return (
-            <div className="h-full flex flex-col items-center justify-center bg-base-100 p-8">
+            <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-gray-900 p-8">
                 <div className="max-w-md text-center">
-                    <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                        <SparklesIcon className="w-8 h-8 text-primary" />
+                    <div className="w-16 h-16 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mx-auto mb-6">
+                        <SparklesIcon className="w-8 h-8 text-orange-500" />
                     </div>
-                    <h1 className="text-2xl font-semibold text-base-content mb-2">Claude Worktree</h1>
-                    <p className="text-base-content/60 mb-8">
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Claude Worktree</h1>
+                    <p className="text-gray-500 mb-8">
                         AI-powered development workflow
                     </p>
 
@@ -715,25 +719,25 @@ export default function Dashboard({
                     <div className="space-y-2 text-left max-w-xs mx-auto">
                         <button
                             onClick={handleNewTask}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-base-200 hover:bg-base-300 transition-colors group"
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors group"
                         >
-                            <PlusIcon className="w-5 h-5 text-primary" />
-                            <span className="flex-1 text-sm">New Task</span>
-                            <kbd className="text-xs px-1.5 py-0.5 bg-base-300 rounded text-base-content/50 group-hover:bg-base-100">N</kbd>
+                            <PlusIcon className="w-5 h-5 text-orange-500" />
+                            <span className="flex-1 text-sm text-gray-900 dark:text-gray-100">New Task</span>
+                            <kbd className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-500 group-hover:bg-white dark:group-hover:bg-gray-600">N</kbd>
                         </button>
                         <button
                             onClick={() => setShowSettingsDialog(true)}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-base-200 hover:bg-base-300 transition-colors group"
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors group"
                         >
-                            <SettingsIcon className="w-5 h-5 text-base-content/60" />
-                            <span className="flex-1 text-sm">Settings</span>
-                            <kbd className="text-xs px-1.5 py-0.5 bg-base-300 rounded text-base-content/50 group-hover:bg-base-100">,</kbd>
+                            <SettingsIcon className="w-5 h-5 text-gray-500" />
+                            <span className="flex-1 text-sm text-gray-900 dark:text-gray-100">Settings</span>
+                            <kbd className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-500 group-hover:bg-white dark:group-hover:bg-gray-600">,</kbd>
                         </button>
                     </div>
 
                     {/* Keyboard shortcuts hint */}
-                    <p className="text-xs text-base-content/40 mt-8">
-                        Press <kbd className="px-1 py-0.5 bg-base-200 rounded">?</kbd> for keyboard shortcuts
+                    <p className="text-xs text-gray-400 mt-8">
+                        Press <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">?</kbd> for keyboard shortcuts
                     </p>
                 </div>
             </div>
@@ -745,7 +749,7 @@ export default function Dashboard({
             <Head title="Dashboard" />
 
             {/* VS Code style layout */}
-            <div className="h-screen w-full flex flex-col bg-base-100 overflow-hidden">
+            <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900 overflow-hidden">
                 {/* Title Bar */}
                 <TitleBar />
 
@@ -758,11 +762,11 @@ export default function Dashboard({
                             <Sidebar />
                         </Panel>
 
-                        <PanelResizeHandle className="w-px bg-base-300 hover:bg-primary hover:w-0.5 transition-all cursor-col-resize" />
+                        <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-orange-500 hover:w-0.5 transition-all cursor-col-resize" />
 
                         {/* Editor/Chat area */}
                         <Panel minSize={40}>
-                            <div className="h-full bg-base-100">
+                            <div className="h-full bg-white dark:bg-gray-900">
                                 <CenterPanel />
                             </div>
                         </Panel>
@@ -770,7 +774,7 @@ export default function Dashboard({
                         {/* Right panel - Changes or Terminal */}
                         {currentTodo && currentWorktree && rightPanel && (
                             <>
-                                <PanelResizeHandle className="w-px bg-base-300 hover:bg-primary hover:w-0.5 transition-all cursor-col-resize" />
+                                <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-orange-500 hover:w-0.5 transition-all cursor-col-resize" />
                                 <Panel defaultSize={22} minSize={15} maxSize={35}>
                                     {rightPanel === 'changes' ? (
                                         <ChangesPanel
@@ -822,12 +826,12 @@ export default function Dashboard({
             {/* Sequence indicator - shows current key sequence */}
             {sequenceBuffer.length > 0 && (
                 <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-                    <div className="alert shadow-lg bg-base-100 border border-base-300">
-                        <span className="text-sm">
+                    <div className="px-4 py-2 shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <span className="text-sm text-gray-900 dark:text-gray-100">
                             {sequenceBuffer.map((key, i) => (
                                 <span key={i}>
                                     {i > 0 && <span className="mx-1 opacity-50">→</span>}
-                                    <kbd className="kbd kbd-sm">{key}</kbd>
+                                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-sm">{key}</kbd>
                                 </span>
                             ))}
                             <span className="ml-2 animate-pulse opacity-50">...</span>
@@ -849,7 +853,7 @@ export default function Dashboard({
                     />
                     {/* Menu */}
                     <ul
-                        className="fixed menu bg-base-100 rounded-lg shadow-2xl border border-base-300 w-40 p-1 z-[9999]"
+                        className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 w-40 p-1 z-[9999]"
                         style={{ top: menuPosition.top, left: menuPosition.left }}
                     >
                         <li>
@@ -861,7 +865,7 @@ export default function Dashboard({
                                     setOpenMenuId(null);
                                     setMenuPosition(null);
                                 }}
-                                className="flex items-center gap-2 text-sm"
+                                className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                             >
                                 <EditIcon className="w-4 h-4" />
                                 Edit
@@ -875,7 +879,7 @@ export default function Dashboard({
                                     setOpenMenuId(null);
                                     setMenuPosition(null);
                                 }}
-                                className="flex items-center gap-2 text-sm"
+                                className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                             >
                                 <CopyIcon className="w-4 h-4" />
                                 Duplicate
@@ -889,7 +893,7 @@ export default function Dashboard({
                                     setOpenMenuId(null);
                                     setMenuPosition(null);
                                 }}
-                                className="flex items-center gap-2 text-sm text-warning"
+                                className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-amber-600 dark:text-amber-400"
                             >
                                 <ArchiveIcon className="w-4 h-4" />
                                 Archive

@@ -1,40 +1,117 @@
 @import "tailwindcss";
 
+/*
+ * Configure Tailwind v4 dark mode to use .dark class selector
+ * This makes dark: variants work when .dark class is on any ancestor
+ */
+@variant dark (&:where(.dark, .dark *));
+
+/*
+ * Theme System
+ * Uses CSS custom properties that switch based on .dark class on <html>
+ * This allows both semantic color classes AND Tailwind dark: classes to work
+ */
+
+/* Base theme variables (light mode default) */
+:root {
+  /* Text colors */
+  --color-text-high: 13 13 13;
+  --color-text-normal: 51 51 51;
+  --color-text-low: 100 100 100;
+
+  /* Background colors */
+  --color-bg-primary: 255 255 255;
+  --color-bg-secondary: 245 245 245;
+  --color-bg-panel: 235 235 235;
+
+  /* Brand colors */
+  --color-brand: 230 126 34;
+  --color-brand-hover: 211 84 0;
+  --color-brand-secondary: 180 99 27;
+  --color-on-brand: 255 255 255;
+
+  /* Status colors */
+  --color-error: 231 76 60;
+  --color-success: 39 174 96;
+  --color-warning: 243 156 18;
+  --color-info: 52 152 219;
+
+  /* Neutral */
+  --color-neutral: 235 235 235;
+  --color-neutral-foreground: 100 100 100;
+
+  /* Border */
+  --color-border: 217 217 217;
+
+  /* Console */
+  --color-console-bg: 250 250 250;
+  --color-console-fg: 51 51 51;
+}
+
+/* Dark mode overrides */
+:root.dark {
+  /* Text colors */
+  --color-text-high: 245 245 245;
+  --color-text-normal: 196 196 196;
+  --color-text-low: 143 143 143;
+
+  /* Background colors */
+  --color-bg-primary: 33 33 33;
+  --color-bg-secondary: 26 26 26;
+  --color-bg-panel: 41 41 41;
+
+  /* Neutral */
+  --color-neutral: 51 51 51;
+  --color-neutral-foreground: 179 179 179;
+
+  /* Border */
+  --color-border: 51 51 51;
+
+  /* Console */
+  --color-console-bg: 0 0 0;
+  --color-console-fg: 217 217 217;
+}
+
+/* Tell Tailwind about our custom colors using @theme */
 @theme {
-  --color-text-high: hsl(0 0% 5%);
-  --color-text-normal: hsl(0 0% 20%);
-  --color-text-low: hsl(0 0% 39%);
+  /* Map CSS variables to Tailwind color utilities */
+  --color-text-high: rgb(var(--color-text-high));
+  --color-text-normal: rgb(var(--color-text-normal));
+  --color-text-low: rgb(var(--color-text-low));
 
-  --color-bg-primary: hsl(0 0% 100%);
-  --color-bg-secondary: hsl(0 0% 95%);
-  --color-bg-panel: hsl(0 0% 89%);
+  --color-bg-primary: rgb(var(--color-bg-primary));
+  --color-bg-secondary: rgb(var(--color-bg-secondary));
+  --color-bg-panel: rgb(var(--color-bg-panel));
 
-  --color-brand: hsl(25 82% 54%);
-  --color-brand-hover: hsl(25 75% 62%);
-  --color-brand-secondary: hsl(25 82% 37%);
-  --color-on-brand: hsl(0 0% 100%);
+  --color-brand: rgb(var(--color-brand));
+  --color-brand-hover: rgb(var(--color-brand-hover));
+  --color-brand-secondary: rgb(var(--color-brand-secondary));
+  --color-on-brand: rgb(var(--color-on-brand));
 
-  --color-error: hsl(0 59% 57%);
-  --color-success: hsl(117 38% 50%);
-  --color-warning: hsl(32 95% 44%);
-  --color-info: hsl(217 91% 60%);
+  --color-error: rgb(var(--color-error));
+  --color-success: rgb(var(--color-success));
+  --color-warning: rgb(var(--color-warning));
+  --color-info: rgb(var(--color-info));
 
-  --color-neutral: hsl(0 0% 92%);
-  --color-neutral-foreground: hsl(0 0% 39%);
+  --color-neutral: rgb(var(--color-neutral));
+  --color-neutral-foreground: rgb(var(--color-neutral-foreground));
 
-  --color-border: hsl(0 0% 85%);
+  --color-border: rgb(var(--color-border));
 
-  --color-console-bg: hsl(0 0% 98%);
-  --color-console-fg: hsl(0 0% 20%);
+  --color-console-bg: rgb(var(--color-console-bg));
+  --color-console-fg: rgb(var(--color-console-fg));
 
-  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+  /* Typography */
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
 
+  /* Spacing */
   --spacing-half: 0.125rem;
   --spacing-base: 0.5rem;
   --spacing-plusfifty: 0.75rem;
   --spacing-double: 1rem;
 
+  /* Sizes */
   --size-dot: 0.3rem;
   --size-cta: 29px;
   --size-icon-xs: 0.9375rem;
@@ -42,26 +119,10 @@
   --size-icon-base: 1.25rem;
   --size-icon-lg: 1.40625rem;
 
+  /* Radius */
   --radius-sm: 0.125rem;
   --radius-md: 0.25rem;
   --radius-lg: 0.375rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-text-high: hsl(0 0% 96%);
-    --color-text-normal: hsl(0 0% 77%);
-    --color-text-low: hsl(0 0% 56%);
-
-    --color-bg-primary: hsl(0 0% 13%);
-    --color-bg-secondary: hsl(0 0% 11%);
-    --color-bg-panel: hsl(0 0% 16%);
-
-    --color-border: hsl(0 0% 20%);
-
-    --color-console-bg: hsl(0 0% 0%);
-    --color-console-fg: hsl(0 0% 85%);
-  }
 }
 
 @layer base {
@@ -76,10 +137,11 @@
 
   body {
     @apply bg-bg-secondary text-text-high;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   ::selection {
-    @apply bg-brand/20;
+    background-color: rgb(var(--color-brand) / 0.2);
   }
 
   code, pre {
@@ -179,9 +241,9 @@
     background: linear-gradient(
       90deg,
       transparent,
-      var(--color-brand-secondary),
-      var(--color-brand),
-      var(--color-brand-secondary),
+      rgb(var(--color-brand-secondary)),
+      rgb(var(--color-brand)),
+      rgb(var(--color-brand-secondary)),
       transparent
     );
     background-size: 200% 100%;
@@ -217,7 +279,7 @@
   }
 
   .code-block {
-    @apply bg-gray-900 text-gray-100 p-4 overflow-x-auto font-mono text-sm;
+    @apply bg-bg-panel text-text-high p-4 overflow-x-auto font-mono text-sm;
     border-radius: var(--radius-md);
   }
 
@@ -239,15 +301,15 @@
   }
 
   .diff-added {
-    @apply bg-green-50 text-green-800 border-l-4 border-green-500;
+    @apply bg-success/10 text-success border-l-4 border-success;
   }
 
   .diff-removed {
-    @apply bg-red-50 text-red-800 border-l-4 border-red-500;
+    @apply bg-error/10 text-error border-l-4 border-error;
   }
 
   .diff-header {
-    @apply bg-blue-50 text-blue-800 font-mono text-sm;
+    @apply bg-info/10 text-info font-mono text-sm;
   }
 
   .btn-primary {
@@ -413,7 +475,7 @@
     width: 0.5rem;
     height: 1rem;
     margin-left: 0.125rem;
-    background-color: var(--color-brand);
+    background-color: rgb(var(--color-brand));
     animation: cursor-blink 1s ease-in-out infinite;
   }
 
@@ -443,8 +505,8 @@
 
   .console {
     @apply font-mono text-sm;
-    background-color: var(--color-console-bg);
-    color: var(--color-console-fg);
+    background-color: rgb(var(--color-console-bg));
+    color: rgb(var(--color-console-fg));
   }
 
   .console-line {
@@ -464,19 +526,19 @@
   }
 
   .kanban-header-todo {
-    background: linear-gradient(to right, var(--color-neutral) 3%, transparent);
+    background: linear-gradient(to right, rgb(var(--color-neutral)) 3%, transparent);
   }
 
   .kanban-header-running {
-    background: linear-gradient(to right, hsl(217 91% 60% / 0.1) 3%, transparent);
+    background: linear-gradient(to right, rgb(var(--color-info) / 0.1) 3%, transparent);
   }
 
   .kanban-header-completed {
-    background: linear-gradient(to right, hsl(117 38% 50% / 0.1) 3%, transparent);
+    background: linear-gradient(to right, rgb(var(--color-success) / 0.1) 3%, transparent);
   }
 
   .kanban-header-failed {
-    background: linear-gradient(to right, hsl(0 59% 57% / 0.1) 3%, transparent);
+    background: linear-gradient(to right, rgb(var(--color-error) / 0.1) 3%, transparent);
   }
 
   .status-dot {
@@ -501,6 +563,25 @@
 }
 
 @layer utilities {
+  /* Custom thin scrollbar - gray theme */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-200 dark:bg-gray-700;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-300 dark:bg-gray-600;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
   }
@@ -515,11 +596,11 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
+    @apply bg-gray-200 dark:bg-gray-700 rounded-full;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-text-low;
+    @apply bg-gray-300 dark:bg-gray-600;
   }
 
   .scrollbar-hide {
