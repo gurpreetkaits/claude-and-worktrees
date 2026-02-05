@@ -70,6 +70,11 @@ Route::post('/sessions/{session}/cancel', [ClaudeStreamController::class, 'cance
 Route::get('/sessions/{session}/status', [ClaudeStreamController::class, 'status'])
     ->name('claude.status')
     ->withoutMiddleware($sessionMiddleware);
+Route::post('/todos/{todo}/cancel', [ClaudeStreamController::class, 'cancelTodo'])
+    ->name('claude.cancel.todo')
+    ->withoutMiddleware($sessionMiddleware);
+Route::get('/api/running-tasks', [ClaudeStreamController::class, 'runningTasks'])
+    ->name('claude.running');
 
 // Settings
 Route::get('/api/settings', [SettingsController::class, 'show'])->name('settings.show');

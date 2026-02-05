@@ -60,6 +60,11 @@ class Todo extends Model
         $this->update(['status' => 'failed']);
     }
 
+    public function markAsCancelled(): void
+    {
+        $this->update(['status' => 'cancelled']);
+    }
+
     public function isPending(): bool
     {
         return $this->status === 'pending';

@@ -155,6 +155,10 @@ const CLAUDE_EVENTS = [
     'post_command_result',
     'hook_executed',
     'queued_message_pending',
+    'cancellation_requested',
+    'cancellation_acknowledged',
+    'cancelled',
+    'shutdown_initiated',
 ];
 
 // Global session manager with WebSocket + SSE support
@@ -561,11 +565,31 @@ class ConcurrentSessionManager {
                     }],
                 });
                 break;
+
+            case 'cancellation_requested':
+                console.log(`[SessionManager] Cancellation requested for todo ${todoId}`);
+                break;
+
+            case 'cancellation_acknowledged':
+                console.log(`[SessionManager] Cancellation acknowledged for todo ${todoId}:`, data.message);
+                break;
+
+            case 'cancelled':
+                this.updateSession(todoId, {
+                    isStreaming: false,
+                    currentText: (data.message as Message)?.content || session.currentText,
+                    lastCompletedMessage: data.message as Message,
+                });
+                console.log(`[SessionManager] Task cancelled for todo ${todoId}`);
+                break;
+
+            case 'shutdown_initiated':
+                console.log(`[SessionManager] Shutdown initiated for todo ${todoId}`);
+                break;
         }
     }
 
     async cancel(todoId: number): Promise<void> {
-        const session = this.getSession(todoId);
         const abortController = this.abortControllers.get(todoId);
 
         // Abort SSE stream if active
@@ -577,15 +601,18 @@ class ConcurrentSessionManager {
         // Update state immediately
         this.updateSession(todoId, { isStreaming: false, queuedMessages: [] });
 
-        // Try to cancel on backend (fire and forget)
-        if (session.sessionKey) {
-            fetch(route('claude.cancel', session.sessionKey), {
+        // Cancel on backend via TaskManager (works for both WebSocket and SSE modes)
+        try {
+            await fetch(route('claude.cancel.todo', todoId), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
                 },
-            }).catch(() => {});
+            });
+            console.log(`[SessionManager] Cancellation request sent for todo ${todoId}`);
+        } catch (error) {
+            console.error(`[SessionManager] Failed to send cancellation for todo ${todoId}:`, error);
         }
 
         // Note: Keep WebSocket channel subscribed for potential future messages

@@ -7,6 +7,7 @@ use App\Models\Todo;
 use App\Models\ClaudeSession;
 use App\Services\ClaudeProcessService;
 use App\Services\ClaudeStreamService;
+use App\Services\TaskManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -112,6 +113,7 @@ class ClaudeStreamController extends Controller
 
     /**
      * Cancel a running Claude session.
+     * Supports both queue-based (TaskManager) and direct process cancellation.
      */
     public function cancel(ClaudeSession $session): JsonResponse
     {
@@ -122,18 +124,24 @@ class ClaudeStreamController extends Controller
             ], 400);
         }
 
-        $cancelled = false;
+        $todoId = $session->todo_id;
 
+        // Request cancellation via TaskManager (for queue-based execution)
+        TaskManager::requestCancellation($todoId);
+
+        // Also try direct process kill if we have a PID (for legacy/fallback)
+        $processKilled = false;
         if ($session->process_id) {
-            $cancelled = ClaudeProcessService::cancelByProcessId($session->process_id);
+            $processKilled = ClaudeProcessService::cancelByProcessId($session->process_id);
         }
 
-        if ($cancelled) {
-            $session->markAsCancelled();
-        }
+        // Attempt graceful shutdown
+        $graceful = TaskManager::gracefulShutdown($todoId, $session);
 
         return response()->json([
-            'success' => $cancelled,
+            'success' => true,
+            'graceful' => $graceful,
+            'process_killed' => $processKilled,
             'session' => $session->fresh()->toArray(),
         ]);
     }
@@ -154,6 +162,62 @@ class ClaudeStreamController extends Controller
 
         return response()->json([
             'session' => $session->fresh()->toArray(),
+        ]);
+    }
+
+    /**
+     * Cancel a running task by todo ID.
+     * Convenient endpoint that finds and cancels any active session.
+     */
+    public function cancelTodo(Todo $todo): JsonResponse
+    {
+        // Find the active session
+        $session = $todo->sessions()
+            ->whereIn('status', ['starting', 'running'])
+            ->latest()
+            ->first();
+
+        if (!$session) {
+            // No running session, but still request cancellation in case
+            // a job is about to start
+            TaskManager::requestCancellation($todo->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cancellation requested (no active session found)',
+            ]);
+        }
+
+        // Request cancellation via TaskManager
+        TaskManager::requestCancellation($todo->id);
+
+        // Try direct process kill if available
+        $processKilled = false;
+        if ($session->process_id) {
+            $processKilled = ClaudeProcessService::cancelByProcessId($session->process_id);
+        }
+
+        // Attempt graceful shutdown
+        $graceful = TaskManager::gracefulShutdown($todo->id, $session);
+
+        return response()->json([
+            'success' => true,
+            'graceful' => $graceful,
+            'process_killed' => $processKilled,
+            'session' => $session->fresh()->toArray(),
+        ]);
+    }
+
+    /**
+     * Get all currently running tasks.
+     */
+    public function runningTasks(): JsonResponse
+    {
+        $tasks = TaskManager::getRunningTasks();
+
+        return response()->json([
+            'tasks' => $tasks,
+            'count' => count($tasks),
         ]);
     }
 }
