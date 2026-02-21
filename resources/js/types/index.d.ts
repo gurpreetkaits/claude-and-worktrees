@@ -11,7 +11,7 @@ export interface Worktree {
 }
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku';
-export type TodoStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type TodoStatus = 'pending' | 'running' | 'completed' | 'failed' | 'qa' | 'cancelled';
 
 export interface Todo {
     id: number;

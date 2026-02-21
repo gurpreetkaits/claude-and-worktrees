@@ -8,11 +8,34 @@ import { ChatThinking } from './ChatThinking';
 import { ChatErrorMessage } from './ChatErrorMessage';
 import { ChatInput, ImageAttachment } from './ChatInput';
 import { useTodoSession } from '@/hooks/useConcurrentSessions';
-import { SparklesIcon } from '../ui/Icons';
+import { SparklesIcon, CheckCircleIcon, XIcon } from '../ui/Icons';
 import { parseCommand, getCommandByName, executeCommand, CommandContext } from './CommandExecutor';
 import { Markdown } from '../ui/Markdown';
 
-// System message for command results
+// Completion banner
+function CompletionBanner({ costUsd, durationMs, onDismiss }: { costUsd: number | null; durationMs: number | null; onDismiss: () => void }) {
+    useEffect(() => {
+        const timer = setTimeout(onDismiss, 10000);
+        return () => clearTimeout(timer);
+    }, [onDismiss]);
+
+    return (
+        <div className="animate-fade-in mx-auto max-w-3xl mb-4">
+            <div className="flex items-center gap-3 px-4 py-2.5 bg-bg-muted border border-border rounded-md">
+                <CheckCircleIcon className="w-4 h-4 text-success flex-shrink-0" />
+                <span className="text-xs font-medium text-fg flex-1">Task completed</span>
+                <div className="flex items-center gap-2 text-[11px] text-fg-muted">
+                    {costUsd !== null && <span>${costUsd.toFixed(4)}</span>}
+                    {durationMs !== null && <span>{(durationMs / 1000).toFixed(1)}s</span>}
+                </div>
+                <button onClick={onDismiss} className="p-0.5 text-fg-muted hover:text-fg rounded transition-colors">
+                    <XIcon className="w-3 h-3" />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 interface SystemMessage {
     id: string;
     type: 'info' | 'error';
@@ -47,30 +70,15 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [userScrolled, setUserScrolled] = useState(false);
     const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
+    const [showCompletionBanner, setShowCompletionBanner] = useState(false);
 
     const {
-        isStreaming,
-        currentText,
-        error,
-        toolUses,
-        toolResults,
-        thinking,
-        costUsd,
-        durationMs,
-        queuedMessages,
-        lastUserMessage,
-        lastCompletedMessage,
-        completionCount,
-        sendMessage,
-        queueMessage,
-        clearQueue,
-        clearQueueItem,
-        cancel,
-        setDraftInput,
-        getDraftInput,
+        isStreaming, currentText, error, toolUses, toolResults, thinking,
+        costUsd, durationMs, queuedMessages, lastUserMessage, lastCompletedMessage,
+        completionCount, sendMessage, queueMessage, clearQueue, clearQueueItem,
+        cancel, setDraftInput, getDraftInput,
     } = useTodoSession(todo.id);
 
-    // Sync input with draft storage
     const setInput = useCallback((value: string) => {
         setInputLocal(value);
         setDraftInput(value);
@@ -80,7 +88,6 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
         setInputLocal(getDraftInput());
     }, [todo.id, getDraftInput]);
 
-    // Track processed messages
     const lastProcessedUserMessageId = useRef<number | null>(null);
     const lastProcessedCompletionCount = useRef(0);
     const currentTodoId = useRef(todo.id);
@@ -113,52 +120,55 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
     const handleScroll = useCallback(() => {
         if (!messagesContainerRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-        const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-        setUserScrolled(!isAtBottom);
+        setUserScrolled(scrollHeight - scrollTop - clientHeight > 50);
     }, []);
 
     const scrollToBottom = useCallback((instant = false) => {
-        if (userScrolled) return;
-        messagesEndRef.current?.scrollIntoView({
-            behavior: instant ? 'instant' : 'smooth',
-            block: 'end'
+        requestAnimationFrame(() => {
+            messagesEndRef.current?.scrollIntoView({
+                behavior: instant ? 'instant' : 'smooth',
+                block: 'end'
+            });
         });
-    }, [userScrolled]);
+    }, []);
+
+    const prevIsStreaming = useRef(isStreaming);
+    useEffect(() => {
+        if (prevIsStreaming.current && !isStreaming) {
+            setUserScrolled(false);
+            scrollToBottom(false);
+            if (messages.length > 0 || currentText) {
+                setShowCompletionBanner(true);
+            }
+        }
+        prevIsStreaming.current = isStreaming;
+    }, [isStreaming, scrollToBottom, messages.length, currentText]);
 
     useEffect(() => {
-        if (!isStreaming && !userScrolled) {
-            scrollToBottom(false);
-        }
-    }, [messages.length, isStreaming, scrollToBottom, userScrolled]);
+        if (!userScrolled) scrollToBottom(false);
+    }, [messages.length, scrollToBottom, userScrolled]);
 
-    // Scroll during streaming
     const lastScrollTime = useRef(0);
     useEffect(() => {
-        if (!isStreaming || userScrolled) return;
+        if (!isStreaming) return;
         const now = Date.now();
-        if (now - lastScrollTime.current > 100) {
+        if (now - lastScrollTime.current > 80) {
             lastScrollTime.current = now;
             scrollToBottom(false);
         }
-    }, [currentText, isStreaming, userScrolled, scrollToBottom]);
+    }, [currentText, isStreaming, scrollToBottom]);
 
-    // Clear images on todo change
     useEffect(() => {
         setImages([]);
         setToolsExpanded(false);
     }, [todo.id]);
 
-    // Add a system message (for command results)
     const addSystemMessage = useCallback((content: string, type: 'info' | 'error' = 'info') => {
         const msg: SystemMessage = {
             id: `sys_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-            type,
-            content,
-            timestamp: Date.now(),
+            type, content, timestamp: Date.now(),
         };
         setSystemMessages(prev => [...prev, msg]);
-
-        // Auto-remove after 30 seconds for info messages
         if (type === 'info') {
             setTimeout(() => {
                 setSystemMessages(prev => prev.filter(m => m.id !== msg.id));
@@ -166,56 +176,36 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
         }
     }, []);
 
-    // Clear system messages
-    const clearSystemMessages = useCallback(() => {
-        setSystemMessages([]);
-    }, []);
+    const clearSystemMessages = useCallback(() => setSystemMessages([]), []);
 
     // Handlers
     const handleSubmit = useCallback(async () => {
         if (!input.trim() && images.length === 0) return;
 
         const userMessage = input.trim();
-        const attachedImages = images.map(img => ({
-            data: img.data,
-            mediaType: img.mediaType,
-        }));
+        const attachedImages = images.map(img => ({ data: img.data, mediaType: img.mediaType }));
 
-        // Check if it's a slash command
         const parsedCommand = parseCommand(userMessage);
         if (parsedCommand && images.length === 0) {
             const command = getCommandByName(parsedCommand.command);
             if (command) {
                 setInput('');
                 setUserScrolled(false);
-
-                // Build command context
                 const context: CommandContext = {
                     todoId: todo.id,
                     worktreePath: todo.worktree?.path,
                     sendMessage: (content) => sendMessage(content),
                     clearMessages: clearSystemMessages,
-                    costUsd,
-                    durationMs,
-                    toolUses,
+                    costUsd, durationMs, toolUses,
                     messages: messages.map(m => ({ role: m.role, content: m.content })),
                 };
-
-                // Execute the command
                 const result = await executeCommand(command, userMessage, context);
-
-                if (result.message) {
-                    addSystemMessage(result.message, 'info');
-                }
-                if (result.error) {
-                    addSystemMessage(result.error, 'error');
-                }
-
+                if (result.message) addSystemMessage(result.message, 'info');
+                if (result.error) addSystemMessage(result.error, 'error');
                 return;
             }
         }
 
-        // Regular message handling
         setInput('');
         setImages([]);
         setUserScrolled(false);
@@ -251,41 +241,30 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
         setImages(prev => prev.filter(img => img.id !== id));
     }, []);
 
-    // Get tool results map
     const toolResultsMap = new Map<string, ToolResult>();
     toolResults.forEach(result => {
-        if (result.tool_use_id) {
-            toolResultsMap.set(result.tool_use_id, result);
-        }
+        if (result.tool_use_id) toolResultsMap.set(result.tool_use_id, result);
     });
 
-    const lastUserMessageFromHistory = [...messages].reverse().find(m => m.role === 'user');
     const hasInput = input.trim().length > 0 || images.length > 0;
     const canStart = messages.length === 0 && todo.context && !isStreaming;
-
     const status: 'idle' | 'running' | 'queued' | 'stopping' =
         queuedMessages.length > 0 && isStreaming ? 'queued' : isStreaming ? 'running' : 'idle';
 
     return (
-        <div className={cn('h-full flex flex-col bg-white dark:bg-gray-900', className)}>
-            {/* Stats bar - only show when there are stats */}
+        <div className={cn('h-full flex flex-col bg-bg', className)}>
+            {/* Stats bar */}
             {(costUsd !== null || durationMs !== null) && (
-                <div className="flex-shrink-0 border-b border-gray-100 dark:border-gray-800 px-6 py-2">
-                    <div className="flex items-center justify-end gap-3 text-xs text-gray-500 dark:text-gray-400">
-                        {costUsd !== null && (
-                            <span className="font-medium">${costUsd.toFixed(4)}</span>
-                        )}
-                        {costUsd !== null && durationMs !== null && (
-                            <span className="text-gray-300 dark:text-gray-600">·</span>
-                        )}
-                        {durationMs !== null && (
-                            <span>{(durationMs / 1000).toFixed(1)}s</span>
-                        )}
+                <div className="flex-shrink-0 border-b border-border px-6 py-1.5">
+                    <div className="flex items-center justify-end gap-2 text-[11px] text-fg-muted">
+                        {costUsd !== null && <span>${costUsd.toFixed(4)}</span>}
+                        {costUsd !== null && durationMs !== null && <span className="text-border-strong">&middot;</span>}
+                        {durationMs !== null && <span>{(durationMs / 1000).toFixed(1)}s</span>}
                     </div>
                 </div>
             )}
 
-            {/* Messages - scrollable area */}
+            {/* Messages */}
             <div
                 ref={messagesContainerRef}
                 onScroll={handleScroll}
@@ -293,42 +272,36 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
             >
                 {messages.length === 0 && !isStreaming && systemMessages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                        <div className="w-12 h-12 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center mb-4">
-                            <SparklesIcon className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                        <div className="w-10 h-10 rounded-full bg-bg-muted border border-border flex items-center justify-center mb-4">
+                            <SparklesIcon className="w-5 h-5 text-fg-muted" />
                         </div>
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Ready to work</h3>
+                        <h3 className="text-sm font-medium text-fg-secondary mb-1">Ready to work</h3>
                         {todo.context ? (
-                            <p className="text-sm text-gray-400 dark:text-gray-500 max-w-sm">
-                                Press <span className="text-gray-600 dark:text-gray-300 font-medium">Start</span> to begin or type <span className="text-gray-700 dark:text-gray-300 font-medium">/help</span> for a list of available commands.
+                            <p className="text-xs text-fg-muted max-w-sm">
+                                Press <span className="text-fg font-medium">Start</span> to begin or type <span className="text-fg font-medium">/help</span> for commands.
                             </p>
                         ) : (
-                            <p className="text-sm text-gray-400 dark:text-gray-500 max-w-sm">
-                                No context provided. Add context or type <span className="text-gray-700 dark:text-gray-300 font-medium">/help</span> for commands.
+                            <p className="text-xs text-fg-muted max-w-sm">
+                                No context provided. Add context or type <span className="text-fg font-medium">/help</span>.
                             </p>
                         )}
                     </div>
                 ) : (
-                    <div className="p-6 space-y-4 max-w-4xl mx-auto">
+                    <div className="p-6 space-y-5 max-w-3xl mx-auto">
                         {messages.map((message) => (
                             <div key={message.id}>
                                 {message.role === 'user' ? (
-                                    <ChatUserMessage
-                                        content={message.content}
-                                        onRerun={() => handleRerun(message.content)}
-                                    />
+                                    <ChatUserMessage content={message.content} onRerun={() => handleRerun(message.content)} />
                                 ) : (
                                     <ChatAssistantMessage content={message.content} />
                                 )}
                             </div>
                         ))}
 
-                        {/* Streaming content */}
+                        {/* Streaming */}
                         {isStreaming && (
                             <div className="space-y-3">
-                                {/* Thinking */}
                                 {thinking && <ChatThinking content={thinking} />}
-
-                                {/* Tool uses */}
                                 {toolUses.length > 0 && (
                                     <>
                                         {toolsExpanded ? (
@@ -356,48 +329,43 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
                                         )}
                                     </>
                                 )}
-
-                                {/* Current text */}
-                                {currentText && (
-                                    <ChatAssistantMessage content={currentText} isStreaming={true} />
-                                )}
+                                {currentText && <ChatAssistantMessage content={currentText} isStreaming={true} />}
                             </div>
                         )}
 
-                        {/* System messages from commands */}
+                        {/* System messages */}
                         {systemMessages.map((sysMsg) => (
                             <div
                                 key={sysMsg.id}
                                 className={cn(
-                                    'rounded-lg border p-4',
-                                    sysMsg.type === 'error'
-                                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                    'rounded-md border p-3',
+                                    sysMsg.type === 'error' ? 'bg-error/5 border-error/20' : 'bg-bg-muted border-border'
                                 )}
                             >
-                                <div className="text-sm text-gray-700 dark:text-gray-300">
+                                <div className="text-xs text-fg-secondary">
                                     <Markdown content={sysMsg.content} />
                                 </div>
                             </div>
                         ))}
 
-                        {/* Error */}
                         {error && <ChatErrorMessage message={error} />}
                     </div>
                 )}
 
-                <div ref={messagesEndRef} className="h-8" />
+                <div ref={messagesEndRef} className="h-8" style={{ overflowAnchor: 'auto' }} />
             </div>
 
-            {/* Scroll to bottom button - positioned above input */}
+            {/* Completion banner */}
+            {showCompletionBanner && !isStreaming && (
+                <CompletionBanner costUsd={costUsd} durationMs={durationMs} onDismiss={() => setShowCompletionBanner(false)} />
+            )}
+
+            {/* Scroll to bottom */}
             {userScrolled && (isStreaming || messages.length > 0) && (
                 <div className="flex justify-center py-2">
                     <button
-                        onClick={() => {
-                            setUserScrolled(false);
-                            scrollToBottom(true);
-                        }}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm rounded-full text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all"
+                        onClick={() => { setUserScrolled(false); scrollToBottom(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-bg border border-border shadow-sm rounded-full text-[11px] text-fg-secondary hover:bg-bg-muted transition-all"
                     >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
@@ -407,7 +375,7 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
                 </div>
             )}
 
-            {/* Input - sticky at bottom */}
+            {/* Input */}
             <ChatInput
                 todoId={todo.id}
                 value={input}
@@ -416,18 +384,13 @@ export function ChatConversation({ todo, messages, onNewMessage, className }: Ch
                 onStop={cancel}
                 onQueue={() => {
                     const userMessage = input.trim();
-                    const attachedImages = images.map(img => ({
-                        data: img.data,
-                        mediaType: img.mediaType,
-                    }));
+                    const attachedImages = images.map(img => ({ data: img.data, mediaType: img.mediaType }));
                     setInput('');
                     setImages([]);
                     queueMessage(userMessage, attachedImages.length > 0 ? attachedImages : undefined);
                 }}
                 status={status}
-                placeholder={messages.length === 0
-                    ? 'Or type a custom message...'
-                    : 'Type a follow-up message...'}
+                placeholder={messages.length === 0 ? 'Or type a custom message...' : 'Type a follow-up message...'}
                 images={images}
                 onAddImage={handleAddImage}
                 onRemoveImage={handleRemoveImage}

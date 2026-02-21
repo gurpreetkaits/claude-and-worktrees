@@ -14,14 +14,14 @@ export function ChatUserMessage({ content, onRerun, className }: ChatUserMessage
                 {onRerun && (
                     <button
                         onClick={onRerun}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-all mt-1 flex-shrink-0"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-fg-muted hover:text-fg-secondary transition-all mt-1 flex-shrink-0"
                         title="Rerun this message"
                     >
                         <RerunIcon className="w-3.5 h-3.5" />
                     </button>
                 )}
-                <div className="pl-4 py-2 border-l-2 border-gray-200 dark:border-gray-700">
-                    <pre className="whitespace-pre-wrap font-sans text-sm text-gray-600 dark:text-gray-400 leading-relaxed italic">
+                <div className="bg-bg-muted rounded-lg rounded-tr-sm px-4 py-2.5">
+                    <pre className="whitespace-pre-wrap font-sans text-sm text-fg leading-relaxed">
                         {content}
                     </pre>
                 </div>

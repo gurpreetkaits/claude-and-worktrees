@@ -4,8 +4,8 @@ interface RunningDotsProps {
 
 export function RunningDots({ size = 'md' }: RunningDotsProps) {
     const dotClass = size === 'sm'
-        ? 'w-1 h-1 rounded-full bg-brand'
-        : 'size-dot rounded-full bg-brand';
+        ? 'w-1 h-1 rounded-full bg-fg'
+        : 'size-dot rounded-full bg-fg';
     const gapClass = size === 'sm' ? 'gap-[1px]' : 'gap-[2px]';
 
     return (

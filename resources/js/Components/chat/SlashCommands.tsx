@@ -136,10 +136,10 @@ export function SlashCommandMenu({
     if (filteredCommands.length === 0) {
         return (
             <div className={cn(
-                'absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-lg shadow-xl overflow-hidden z-50',
+                'absolute bottom-full left-0 mb-2 w-72 bg-bg border border-border rounded-lg shadow-xl overflow-hidden z-50',
                 className
             )}>
-                <div className="px-3 py-2 text-sm text-gray-500">
+                <div className="px-3 py-2 text-sm text-fg-muted">
                     No commands found
                 </div>
             </div>
@@ -170,14 +170,14 @@ export function SlashCommandMenu({
         <div
             ref={menuRef}
             className={cn(
-                'absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-50',
+                'absolute bottom-full left-0 mb-2 w-80 bg-bg border border-border rounded-xl shadow-xl overflow-hidden z-50',
                 className
             )}
         >
             {/* Header */}
-            <div className="px-3 py-2 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2">
-                <TerminalIcon className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Commands</span>
+            <div className="px-3 py-2 border-b border-border bg-bg-secondary flex items-center gap-2">
+                <TerminalIcon className="w-4 h-4 text-fg-muted" />
+                <span className="text-xs font-medium text-fg-muted uppercase tracking-wider">Commands</span>
             </div>
 
             {/* Commands list */}
@@ -186,7 +186,7 @@ export function SlashCommandMenu({
                     <div key={category}>
                         {/* Category header - only show if filtering shows multiple categories */}
                         {Object.keys(groupedCommands).length > 1 && (
-                            <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-800/30">
+                            <div className="px-3 py-1.5 text-[10px] font-semibold text-fg-muted uppercase tracking-wider bg-bg-secondary">
                                 {categoryLabels[category] || category}
                             </div>
                         )}
@@ -204,22 +204,22 @@ export function SlashCommandMenu({
                                     className={cn(
                                         'flex items-start gap-2 px-3 py-2 cursor-pointer transition-colors',
                                         isSelected
-                                            ? 'bg-gray-100 dark:bg-gray-700 border-l-2 border-gray-500 dark:border-gray-400'
-                                            : 'hover:bg-gray-50 dark:hover:bg-gray-800 border-l-2 border-transparent'
+                                            ? 'bg-bg-muted border-l-2 border-fg-muted'
+                                            : 'hover:bg-bg-muted border-l-2 border-transparent'
                                     )}
                                 >
                                     <Icon className={cn(
                                         'w-4 h-4 mt-0.5 flex-shrink-0',
-                                        isSelected ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'
+                                        isSelected ? 'text-fg-secondary' : 'text-fg-muted'
                                     )} />
                                     <div className="flex-1 min-w-0">
                                         <div className={cn(
                                             'text-sm font-mono',
-                                            isSelected ? 'text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-200'
+                                            isSelected ? 'text-fg' : 'text-fg-secondary'
                                         )}>
                                             /{command.name}
                                         </div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-500 truncate">
+                                        <div className="text-xs text-fg-muted truncate">
                                             {command.description}
                                         </div>
                                     </div>
@@ -231,11 +231,11 @@ export function SlashCommandMenu({
             </div>
 
             {/* Footer hint */}
-            <div className="px-3 py-1.5 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-gray-800/50 text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-3">
-                <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[9px]">↑↓</kbd> navigate</span>
-                <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[9px]">Tab</kbd> complete</span>
-                <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[9px]">Enter</kbd> send</span>
-                <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-[9px]">Esc</kbd> close</span>
+            <div className="px-3 py-1.5 border-t border-border bg-bg-secondary text-[10px] text-fg-muted flex items-center gap-3">
+                <span><kbd className="px-1 py-0.5 bg-bg-muted rounded text-[9px]">↑↓</kbd> navigate</span>
+                <span><kbd className="px-1 py-0.5 bg-bg-muted rounded text-[9px]">Tab</kbd> complete</span>
+                <span><kbd className="px-1 py-0.5 bg-bg-muted rounded text-[9px]">Enter</kbd> send</span>
+                <span><kbd className="px-1 py-0.5 bg-bg-muted rounded text-[9px]">Esc</kbd> close</span>
             </div>
         </div>
     );

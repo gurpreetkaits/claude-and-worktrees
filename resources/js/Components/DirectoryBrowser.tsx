@@ -102,7 +102,7 @@ export function DirectoryBrowser({ onSelect, onCancel }: DirectoryBrowserProps) 
     const pathParts = currentPath.split('/').filter(Boolean);
 
     return (
-        <div className="bg-bg-primary border border-border rounded-lg overflow-hidden">
+        <div className="bg-bg border border-border rounded-lg overflow-hidden">
             {/* Search/Path input */}
             <div className="p-3 border-b border-border">
                 <input
@@ -111,28 +111,28 @@ export function DirectoryBrowser({ onSelect, onCancel }: DirectoryBrowserProps) 
                     onChange={(e) => handleSearchChange(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     placeholder="Search or type path (e.g. Users/code)..."
-                    className="input-field w-full text-sm font-mono"
+                    className="w-full px-3 py-2 bg-bg border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-fg placeholder:text-fg-muted text-sm font-mono"
                     autoFocus
                 />
             </div>
 
             {/* Breadcrumb */}
             <div className="px-3 py-2 border-b border-border bg-bg-secondary">
-                <div className="flex items-center gap-1 text-sm font-mono overflow-x-auto text-text-high">
+                <div className="flex items-center gap-1 text-sm font-mono overflow-x-auto text-fg">
                     <button
                         onClick={() => browse('/')}
-                        className="hover:text-brand px-1"
+                        className="hover:text-fg px-1"
                     >
                         /
                     </button>
                     {pathParts.map((part, index) => (
                         <span key={index} className="flex items-center">
-                            <ChevronRightIcon className="w-3 h-3 text-text-low flex-shrink-0" />
+                            <ChevronRightIcon className="w-3 h-3 text-fg-muted flex-shrink-0" />
                             <button
                                 onClick={() =>
                                     browse('/' + pathParts.slice(0, index + 1).join('/'))
                                 }
-                                className="hover:text-brand px-1 truncate max-w-[150px]"
+                                className="hover:text-fg px-1 truncate max-w-[150px]"
                             >
                                 {part}
                             </button>
@@ -144,9 +144,9 @@ export function DirectoryBrowser({ onSelect, onCancel }: DirectoryBrowserProps) 
             {/* Directory listing */}
             <div className="max-h-[280px] overflow-y-auto scrollbar-thin">
                 {loading ? (
-                    <div className="p-4 text-center text-text-low text-sm">Loading...</div>
+                    <div className="p-4 text-center text-fg-muted text-sm">Loading...</div>
                 ) : filteredEntries.length === 0 ? (
-                    <div className="p-4 text-center text-text-low text-sm">
+                    <div className="p-4 text-center text-fg-muted text-sm">
                         {search ? 'No folders match' : 'Empty directory'}
                     </div>
                 ) : (
@@ -155,24 +155,24 @@ export function DirectoryBrowser({ onSelect, onCancel }: DirectoryBrowserProps) 
                             <button
                                 key={entry.path}
                                 onClick={() => browse(entry.path)}
-                                className="w-full px-3 py-2 flex items-center gap-3 hover:bg-bg-panel text-left transition-colors"
+                                className="w-full px-3 py-2 flex items-center gap-3 hover:bg-bg-muted text-left transition-colors"
                             >
                                 <FolderIcon
                                     className={`w-4 h-4 flex-shrink-0 ${
                                         entry.isGitRepo
-                                            ? 'text-brand'
-                                            : 'text-text-low'
+                                            ? 'text-fg'
+                                            : 'text-fg-muted'
                                     }`}
                                 />
                                 <span
                                     className={`flex-1 truncate font-mono text-sm ${
-                                        entry.isHidden ? 'text-text-low' : 'text-text-high'
+                                        entry.isHidden ? 'text-fg-muted' : 'text-fg'
                                     }`}
                                 >
                                     {entry.name}
                                 </span>
                                 {entry.isGitRepo && (
-                                    <span className="flex items-center gap-1 text-xs text-brand bg-brand/10 px-2 py-0.5 rounded">
+                                    <span className="flex items-center gap-1 text-xs text-fg bg-fg/10 px-2 py-0.5 rounded">
                                         <GitBranchIcon className="w-3 h-3" />
                                         git
                                     </span>
@@ -186,17 +186,17 @@ export function DirectoryBrowser({ onSelect, onCancel }: DirectoryBrowserProps) 
             {/* Footer */}
             <div className="p-3 border-t border-border bg-bg-secondary">
                 <div className="flex items-center justify-between mb-3">
-                    <label className="flex items-center gap-2 text-sm text-text-low">
+                    <label className="flex items-center gap-2 text-sm text-fg-muted">
                         <input
                             type="checkbox"
                             checked={showHidden}
                             onChange={(e) => setShowHidden(e.target.checked)}
-                            className="rounded border-border bg-bg-primary"
+                            className="rounded border-border bg-bg"
                         />
                         Show hidden
                     </label>
                     {isGitRepo && (
-                        <span className="flex items-center gap-1 text-sm text-brand">
+                        <span className="flex items-center gap-1 text-sm text-fg">
                             <GitBranchIcon className="w-4 h-4" />
                             {currentBranch || 'detached'}
                         </span>
@@ -206,11 +206,11 @@ export function DirectoryBrowser({ onSelect, onCancel }: DirectoryBrowserProps) 
                     <button
                         onClick={handleSelect}
                         disabled={!isGitRepo}
-                        className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 py-2 text-sm font-medium rounded-md bg-fg text-accent-fg hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isGitRepo ? 'Select Repository' : 'Not a Git Repository'}
                     </button>
-                    <button onClick={onCancel} className="btn-secondary">
+                    <button onClick={onCancel} className="px-4 py-2 text-sm font-medium rounded-md bg-bg-secondary border border-border text-fg hover:bg-bg-muted transition-colors">
                         Cancel
                     </button>
                 </div>

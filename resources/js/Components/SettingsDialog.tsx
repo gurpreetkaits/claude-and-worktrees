@@ -311,14 +311,14 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
     if (!show) return null;
 
     return (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-zinc-950 overflow-auto">
+        <div className="fixed inset-0 z-50 bg-bg overflow-auto">
             <div className="max-w-6xl mx-auto px-6 py-8">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8 sticky top-0 bg-white dark:bg-zinc-950 py-4 -mt-4 z-10 border-b border-zinc-100 dark:border-white/5">
-                    <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">Settings</h1>
+                <div className="flex items-center justify-between mb-8 sticky top-0 bg-bg py-4 -mt-4 z-10 border-b border-border">
+                    <h1 className="text-2xl font-semibold text-fg">Settings</h1>
                     <button
                         onClick={onClose}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/10 rounded-lg hover:border-zinc-300 dark:hover:border-white/20 transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-fg-muted hover:text-fg border border-border rounded-lg hover:border-border-strong transition-colors"
                     >
                         <XIcon className="w-4 h-4" />
                         <span className="text-xs font-medium">ESC</span>
@@ -327,11 +327,11 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
 
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-32 gap-3">
-                        <svg className="animate-spin w-8 h-8 text-orange-500" viewBox="0 0 24 24" fill="none">
+                        <svg className="animate-spin w-8 h-8 text-fg" viewBox="0 0 24 24" fill="none">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        <span className="text-sm text-zinc-500">Loading settings...</span>
+                        <span className="text-sm text-fg-muted">Loading settings...</span>
                     </div>
                 ) : (
                     <div className="flex flex-col lg:flex-row gap-8">
@@ -347,16 +347,16 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                             onClick={() => setActiveTab(i)}
                                             className={`w-full flex items-start gap-3 px-4 py-3 text-left rounded-xl transition-all ${
                                                 isActive
-                                                    ? 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                                                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5'
+                                                    ? 'bg-fg/5 text-fg'
+                                                    : 'text-fg-secondary hover:bg-bg-muted'
                                             }`}
                                         >
-                                            <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${isActive ? 'text-orange-500' : 'text-zinc-400 dark:text-zinc-500'}`} />
+                                            <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${isActive ? 'text-fg' : 'text-fg-muted'}`} />
                                             <div className="flex-1 min-w-0">
-                                                <div className={`font-medium ${isActive ? 'text-orange-600 dark:text-orange-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                                <div className={`font-medium ${isActive ? 'text-fg' : 'text-fg-secondary'}`}>
                                                     {tab.name}
                                                 </div>
-                                                <div className="text-xs text-zinc-500 dark:text-zinc-500">
+                                                <div className="text-xs text-fg-muted">
                                                     {tab.description}
                                                 </div>
                                             </div>
@@ -371,21 +371,21 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                             {/* General Tab */}
                             {activeTab === 0 && (
                                 <div className="space-y-8">
-                                    <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/5 p-6 space-y-6">
+                                    <div className="bg-bg-secondary rounded-2xl border border-border p-6 space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Projects Directory</h3>
-                                            <p className="text-sm text-zinc-500 mb-4">Default location for browsing and creating projects</p>
+                                            <h3 className="text-lg font-semibold text-fg mb-1">Projects Directory</h3>
+                                            <p className="text-sm text-fg-muted mb-4">Default location for browsing and creating projects</p>
                                             <div className="flex gap-3">
                                                 <input
                                                     type="text"
                                                     value={defaultProjectsDirectory}
                                                     onChange={(e) => setDefaultProjectsDirectory(e.target.value)}
                                                     placeholder="/Users/you/projects"
-                                                    className="flex-1 px-4 py-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                                                    className="flex-1 px-4 py-3 bg-bg border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-ring transition-all text-fg placeholder:text-fg-muted"
                                                 />
                                                 <button
                                                     onClick={openDirectoryBrowser}
-                                                    className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-300 font-medium rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                                                    className="flex items-center gap-2 px-4 py-3 bg-bg border border-border text-fg-secondary font-medium rounded-xl hover:bg-bg-muted transition-colors"
                                                 >
                                                     <FolderIcon className="w-4 h-4" />
                                                     Browse
@@ -393,12 +393,12 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                             </div>
 
                                             {showDirectoryBrowser && (
-                                                <div className="mt-4 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
-                                                    <div className="px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-between border-b border-zinc-200 dark:border-white/5">
-                                                        <span className="text-xs text-zinc-500 truncate flex-1 font-mono">{browserPath || '/'}</span>
+                                                <div className="mt-4 bg-bg rounded-xl border border-border overflow-hidden">
+                                                    <div className="px-4 py-3 bg-bg-secondary flex items-center justify-between border-b border-border">
+                                                        <span className="text-xs text-fg-muted truncate flex-1 font-mono">{browserPath || '/'}</span>
                                                         <button
                                                             onClick={() => setShowDirectoryBrowser(false)}
-                                                            className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+                                                            className="text-xs text-fg-muted hover:text-fg transition-colors"
                                                         >
                                                             Cancel
                                                         </button>
@@ -406,7 +406,7 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                                     <div className="max-h-48 overflow-y-auto">
                                                         {isBrowsing ? (
                                                             <div className="p-6 text-center">
-                                                                <svg className="animate-spin w-5 h-5 text-orange-500 mx-auto" viewBox="0 0 24 24" fill="none">
+                                                                <svg className="animate-spin w-5 h-5 text-fg mx-auto" viewBox="0 0 24 24" fill="none">
                                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                                                 </svg>
@@ -414,28 +414,28 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                                         ) : (
                                                             <>
                                                                 {browserEntries.map((entry) => (
-                                                                    <div key={entry.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-700/50 border-b border-zinc-100 dark:border-white/5 last:border-b-0">
-                                                                        <FolderIcon className="w-4 h-4 text-zinc-400" />
+                                                                    <div key={entry.path} className="flex items-center gap-3 px-4 py-2.5 hover:bg-bg-muted border-b border-border last:border-b-0">
+                                                                        <FolderIcon className="w-4 h-4 text-fg-muted" />
                                                                         <button
                                                                             onClick={() => browseDirectory(entry.path)}
-                                                                            className="flex-1 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:text-orange-500 truncate transition-colors"
+                                                                            className="flex-1 text-left text-sm text-fg-secondary hover:text-fg truncate transition-colors"
                                                                         >
                                                                             {entry.name}
                                                                         </button>
                                                                         {entry.name !== '..' && (
                                                                             <button
                                                                                 onClick={() => selectDirectory(entry.path)}
-                                                                                className="px-3 py-1 text-xs font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                                                                                className="px-3 py-1 text-xs font-medium bg-fg hover:opacity-90 text-accent-fg rounded-lg transition-colors"
                                                                             >
                                                                                 Select
                                                                             </button>
                                                                         )}
                                                                     </div>
                                                                 ))}
-                                                                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/50">
+                                                                <div className="p-3 bg-bg-secondary">
                                                                     <button
                                                                         onClick={() => selectDirectory(browserPath)}
-                                                                        className="w-full py-2 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                                                                        className="w-full py-2 text-sm font-medium bg-fg hover:opacity-90 text-accent-fg rounded-lg transition-colors"
                                                                     >
                                                                         Select Current Directory
                                                                     </button>
@@ -447,20 +447,20 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                             )}
                                         </div>
 
-                                        <div className="border-t border-zinc-200 dark:border-white/5 pt-6">
-                                            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Default Context</h3>
-                                            <p className="text-sm text-zinc-500 mb-4">Pre-filled context for all new tasks</p>
+                                        <div className="border-t border-border pt-6">
+                                            <h3 className="text-lg font-semibold text-fg mb-1">Default Context</h3>
+                                            <p className="text-sm text-fg-muted mb-4">Pre-filled context for all new tasks</p>
                                             <textarea
                                                 value={defaultContext}
                                                 onChange={(e) => setDefaultContext(e.target.value)}
                                                 placeholder="Context to include with all new tasks..."
-                                                className="w-full px-4 py-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-zinc-900 dark:text-white placeholder:text-zinc-400 min-h-[120px] resize-y"
+                                                className="w-full px-4 py-3 bg-bg border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-ring transition-all text-fg placeholder:text-fg-muted min-h-[120px] resize-y"
                                             />
                                         </div>
 
-                                        <div className="border-t border-zinc-200 dark:border-white/5 pt-6">
-                                            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Default Model</h3>
-                                            <p className="text-sm text-zinc-500 mb-4">Model used for new tasks</p>
+                                        <div className="border-t border-border pt-6">
+                                            <h3 className="text-lg font-semibold text-fg mb-1">Default Model</h3>
+                                            <p className="text-sm text-fg-muted mb-4">Model used for new tasks</p>
                                             <div className="grid grid-cols-3 gap-4">
                                                 {(['sonnet', 'opus', 'haiku'] as ClaudeModel[]).map((modelKey) => {
                                                     const isSelected = defaultModel === modelKey;
@@ -473,19 +473,19 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                                             className={`relative p-4 text-left transition-all rounded-xl border-2 ${
                                                                 isSelected
                                                                     ? `${colors.bg} ${colors.border} shadow-lg`
-                                                                    : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20'
+                                                                    : 'bg-bg border-border hover:border-border-strong'
                                                             }`}
                                                         >
                                                             {isSelected && (
                                                                 <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${colors.text.replace('text-', 'bg-')}`} />
                                                             )}
-                                                            <div className={`mb-2 ${isSelected ? colors.text : 'text-zinc-400 dark:text-zinc-500'}`}>
+                                                            <div className={`mb-2 ${isSelected ? colors.text : 'text-fg-muted'}`}>
                                                                 {modelIcons[modelKey]}
                                                             </div>
-                                                            <div className={`font-semibold text-sm ${isSelected ? 'text-zinc-900 dark:text-white' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                                            <div className={`font-semibold text-sm ${isSelected ? 'text-fg' : 'text-fg-secondary'}`}>
                                                                 {defaultModels[modelKey].name.replace('Claude ', '')}
                                                             </div>
-                                                            <div className="text-xs text-zinc-500 mt-1">
+                                                            <div className="text-xs text-fg-muted mt-1">
                                                                 {defaultModels[modelKey].description}
                                                             </div>
                                                         </button>
@@ -500,10 +500,10 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                             {/* Appearance Tab */}
                             {activeTab === 1 && (
                                 <div className="space-y-8">
-                                    <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/5 p-6 space-y-6">
+                                    <div className="bg-bg-secondary rounded-2xl border border-border p-6 space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Theme</h3>
-                                            <p className="text-sm text-zinc-500 mb-4">Choose how the application looks</p>
+                                            <h3 className="text-lg font-semibold text-fg mb-1">Theme</h3>
+                                            <p className="text-sm text-fg-muted mb-4">Choose how the application looks</p>
                                             <div className="grid grid-cols-3 gap-4">
                                                 {([
                                                     { key: 'light', name: 'Light', description: 'Light background', icon: SunIcon },
@@ -519,20 +519,20 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                                             onClick={() => setTheme(option.key)}
                                                             className={`relative p-4 text-left transition-all rounded-xl border-2 ${
                                                                 isSelected
-                                                                    ? 'bg-orange-500/10 border-orange-500 shadow-lg'
-                                                                    : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20'
+                                                                    ? 'bg-fg/10 border-fg shadow-lg'
+                                                                    : 'bg-bg border-border hover:border-border-strong'
                                                             }`}
                                                         >
                                                             {isSelected && (
-                                                                <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-orange-500" />
+                                                                <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-fg" />
                                                             )}
-                                                            <div className={`mb-2 ${isSelected ? 'text-orange-500' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                                                            <div className={`mb-2 ${isSelected ? 'text-fg' : 'text-fg-muted'}`}>
                                                                 <Icon className="w-5 h-5" />
                                                             </div>
-                                                            <div className={`font-semibold text-sm ${isSelected ? 'text-zinc-900 dark:text-white' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                                            <div className={`font-semibold text-sm ${isSelected ? 'text-fg' : 'text-fg-secondary'}`}>
                                                                 {option.name}
                                                             </div>
-                                                            <div className="text-xs text-zinc-500 mt-1">
+                                                            <div className="text-xs text-fg-muted mt-1">
                                                                 {option.description}
                                                             </div>
                                                         </button>
@@ -547,57 +547,57 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                             {/* Hooks Tab */}
                             {activeTab === 2 && (
                                 <div className="space-y-6">
-                                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-500/20 rounded-xl p-4 text-sm text-zinc-700 dark:text-zinc-300">
+                                    <div className="bg-bg-muted border border-border-strong rounded-xl p-4 text-sm text-fg-secondary">
                                         Define commands to run on file changes or task lifecycle events.
                                     </div>
 
                                     {hooks.length === 0 ? (
-                                        <div className="text-center py-16 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/5">
-                                            <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-4">
-                                                <PlusIcon className="w-6 h-6 text-zinc-400" />
+                                        <div className="text-center py-16 bg-bg-secondary rounded-2xl border border-border">
+                                            <div className="w-12 h-12 rounded-full bg-bg-muted flex items-center justify-center mx-auto mb-4">
+                                                <PlusIcon className="w-6 h-6 text-fg-muted" />
                                             </div>
-                                            <p className="text-zinc-700 dark:text-zinc-300 font-medium">No hooks configured</p>
-                                            <p className="text-sm text-zinc-500 mt-1">Add a hook to run commands on file changes</p>
+                                            <p className="text-fg-secondary font-medium">No hooks configured</p>
+                                            <p className="text-sm text-fg-muted mt-1">Add a hook to run commands on file changes</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
                                             {hooks.map((hook) => (
-                                                <div key={hook.id} className="bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-white/5 p-5 space-y-4">
+                                                <div key={hook.id} className="bg-bg-secondary rounded-xl border border-border p-5 space-y-4">
                                                     <div className="flex items-center gap-3">
                                                         <label className="flex items-center gap-2 cursor-pointer">
                                                             <input
                                                                 type="checkbox"
                                                                 checked={hook.enabled}
                                                                 onChange={(e) => updateHook(hook.id, { enabled: e.target.checked })}
-                                                                className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-orange-500 focus:ring-orange-500/30"
+                                                                className="w-4 h-4 rounded border-border-strong text-fg focus:ring-ring/30"
                                                             />
-                                                            <span className="text-sm text-zinc-700 dark:text-zinc-300">Enabled</span>
+                                                            <span className="text-sm text-fg-secondary">Enabled</span>
                                                         </label>
                                                         <div className="flex-1" />
                                                         <button
                                                             onClick={() => removeHook(hook.id)}
-                                                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                            className="p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
                                                         >
                                                             <TrashIcon className="w-4 h-4" />
                                                         </button>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div className="space-y-2">
-                                                            <label className="text-xs font-medium text-zinc-500">Directory Pattern</label>
+                                                            <label className="text-xs font-medium text-fg-muted">Directory Pattern</label>
                                                             <input
                                                                 type="text"
                                                                 value={hook.directory_pattern}
                                                                 onChange={(e) => updateHook(hook.id, { directory_pattern: e.target.value })}
                                                                 placeholder="*.ts, src/**/*"
-                                                                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-orange-500 transition-colors text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                                                                className="w-full px-3 py-2 bg-bg border border-border rounded-lg focus:outline-none focus:border-ring transition-colors text-sm text-fg placeholder:text-fg-muted"
                                                             />
                                                         </div>
                                                         <div className="space-y-2">
-                                                            <label className="text-xs font-medium text-zinc-500">Event</label>
+                                                            <label className="text-xs font-medium text-fg-muted">Event</label>
                                                             <select
                                                                 value={hook.event}
                                                                 onChange={(e) => updateHook(hook.id, { event: e.target.value as HookEvent })}
-                                                                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-orange-500 transition-colors text-sm text-zinc-900 dark:text-white"
+                                                                className="w-full px-3 py-2 bg-bg border border-border rounded-lg focus:outline-none focus:border-ring transition-colors text-sm text-fg"
                                                             >
                                                                 <optgroup label="File Events">
                                                                     <option value="before_change">Before Change</option>
@@ -612,13 +612,13 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                                         </div>
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <label className="text-xs font-medium text-zinc-500">Command</label>
+                                                        <label className="text-xs font-medium text-fg-muted">Command</label>
                                                         <input
                                                             type="text"
                                                             value={hook.command}
                                                             onChange={(e) => updateHook(hook.id, { command: e.target.value })}
                                                             placeholder="npm run lint"
-                                                            className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-orange-500 transition-colors text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                                                            className="w-full px-3 py-2 bg-bg border border-border rounded-lg focus:outline-none focus:border-ring transition-colors text-sm text-fg placeholder:text-fg-muted"
                                                         />
                                                     </div>
                                                 </div>
@@ -628,7 +628,7 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
 
                                     <button
                                         onClick={addHook}
-                                        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/10 hover:border-orange-500 rounded-xl transition-all"
+                                        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-fg-secondary hover:text-fg border border-border hover:border-fg rounded-xl transition-all"
                                     >
                                         <PlusIcon className="w-4 h-4" />
                                         Add Hook
@@ -640,16 +640,16 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                             {activeTab === 3 && (
                                 <div className="space-y-8">
                                     <div className="flex items-center justify-between">
-                                        <div className="flex-1 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-500/20 rounded-xl p-4 text-sm text-zinc-700 dark:text-zinc-300">
+                                        <div className="flex-1 bg-bg-muted border border-border-strong rounded-xl p-4 text-sm text-fg-secondary">
                                             Configure MCP (Model Context Protocol) servers for Claude. These servers provide additional capabilities.
                                         </div>
                                         <button
                                             onClick={syncMcpConfig}
                                             disabled={isSyncing}
-                                            className="ml-4 flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl transition-all disabled:opacity-50"
+                                            className="ml-4 flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-bg-muted hover:bg-bg-accent text-fg-secondary rounded-xl transition-all disabled:opacity-50"
                                         >
                                             {syncSuccess ? (
-                                                <CheckIcon className="w-4 h-4 text-emerald-500" />
+                                                <CheckIcon className="w-4 h-4 text-success" />
                                             ) : (
                                                 <RefreshIcon className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                                             )}
@@ -658,9 +658,9 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                     </div>
 
                                     {/* Preconfigured Servers */}
-                                    <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/5 p-6">
-                                        <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Popular MCP Servers</h3>
-                                        <p className="text-sm text-zinc-500 mb-4">Click to add a preconfigured server</p>
+                                    <div className="bg-bg-secondary rounded-2xl border border-border p-6">
+                                        <h3 className="text-lg font-semibold text-fg mb-1">Popular MCP Servers</h3>
+                                        <p className="text-sm text-fg-muted mb-4">Click to add a preconfigured server</p>
                                         <div className="grid grid-cols-2 gap-3">
                                             {PRECONFIGURED_MCP_SERVERS.filter(
                                                 server => !mcpServers.some(s => s.name === server.key)
@@ -669,89 +669,89 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                                     key={server.key}
                                                     type="button"
                                                     onClick={() => addPreconfiguredServer(server)}
-                                                    className="flex items-start gap-3 p-4 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-300 dark:hover:border-white/20 transition-colors text-left group"
+                                                    className="flex items-start gap-3 p-4 rounded-xl border border-border bg-bg hover:bg-bg-muted hover:border-border-strong transition-colors text-left group"
                                                 >
-                                                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
-                                                        <span className="text-base font-bold text-orange-500">
+                                                    <div className="w-10 h-10 rounded-xl bg-fg/10 border border-fg/20 flex items-center justify-center shrink-0">
+                                                        <span className="text-base font-bold text-fg">
                                                             {server.name.slice(0, 1).toUpperCase()}
                                                         </span>
                                                     </div>
                                                     <div className="min-w-0 flex-1">
-                                                        <div className="text-sm font-medium text-zinc-900 dark:text-white">
+                                                        <div className="text-sm font-medium text-fg">
                                                             {server.name}
                                                         </div>
-                                                        <div className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 mt-0.5">
+                                                        <div className="text-xs text-fg-muted line-clamp-2 mt-0.5">
                                                             {server.description}
                                                         </div>
                                                     </div>
-                                                    <PlusIcon className="w-5 h-5 text-zinc-400 group-hover:text-orange-500 shrink-0 transition-colors" />
+                                                    <PlusIcon className="w-5 h-5 text-fg-muted group-hover:text-fg shrink-0 transition-colors" />
                                                 </button>
                                             ))}
                                         </div>
                                         {PRECONFIGURED_MCP_SERVERS.every(
                                             server => mcpServers.some(s => s.name === server.key)
                                         ) && (
-                                            <p className="text-sm text-zinc-500 italic text-center py-4">
+                                            <p className="text-sm text-fg-muted italic text-center py-4">
                                                 All preconfigured servers have been added
                                             </p>
                                         )}
                                     </div>
 
                                     {/* Configured Servers */}
-                                    <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/5 p-6">
-                                        <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">Configured Servers</h3>
+                                    <div className="bg-bg-secondary rounded-2xl border border-border p-6">
+                                        <h3 className="text-lg font-semibold text-fg mb-4">Configured Servers</h3>
 
                                         {isLoadingMcp ? (
                                             <div className="text-center py-12">
-                                                <svg className="animate-spin w-8 h-8 text-orange-500 mx-auto" viewBox="0 0 24 24" fill="none">
+                                                <svg className="animate-spin w-8 h-8 text-fg mx-auto" viewBox="0 0 24 24" fill="none">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                                 </svg>
                                             </div>
                                         ) : mcpServers.length === 0 && !showAddMcpForm ? (
-                                            <div className="text-center py-8 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-white/5">
-                                                <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center mx-auto mb-3">
-                                                    <TerminalIcon className="w-5 h-5 text-zinc-400" />
+                                            <div className="text-center py-8 bg-bg rounded-xl border border-border">
+                                                <div className="w-10 h-10 rounded-full bg-bg-muted flex items-center justify-center mx-auto mb-3">
+                                                    <TerminalIcon className="w-5 h-5 text-fg-muted" />
                                                 </div>
-                                                <p className="text-sm text-zinc-600 dark:text-zinc-400">No MCP servers configured</p>
-                                                <p className="text-xs text-zinc-500 mt-1">Add a server from above or create a custom one</p>
+                                                <p className="text-sm text-fg-secondary">No MCP servers configured</p>
+                                                <p className="text-xs text-fg-muted mt-1">Add a server from above or create a custom one</p>
                                             </div>
                                         ) : (
                                             <div className="space-y-3">
                                                 {mcpServers.map((server) => (
-                                                    <div key={server.id} className="bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-white/10 p-4">
+                                                    <div key={server.id} className="bg-bg rounded-xl border border-border p-4">
                                                         <div className="flex items-center gap-3">
                                                             <label className="flex items-center cursor-pointer">
                                                                 <input
                                                                     type="checkbox"
                                                                     checked={server.enabled}
                                                                     onChange={() => toggleMcpServer(server)}
-                                                                    className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-orange-500 focus:ring-orange-500/30"
+                                                                    className="w-4 h-4 rounded border-border-strong text-fg focus:ring-ring/30"
                                                                 />
                                                             </label>
                                                             <div className="flex-1 min-w-0">
-                                                                <div className="font-medium text-zinc-900 dark:text-white truncate">{server.name}</div>
-                                                                <div className="text-xs text-zinc-500 font-mono truncate">{server.command || server.type}</div>
+                                                                <div className="font-medium text-fg truncate">{server.name}</div>
+                                                                <div className="text-xs text-fg-muted font-mono truncate">{server.command || server.type}</div>
                                                             </div>
                                                             <button
                                                                 onClick={() => deleteMcpServer(server)}
-                                                                className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                                className="p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
                                                             >
                                                                 <TrashIcon className="w-4 h-4" />
                                                             </button>
                                                         </div>
                                                         {(server.args?.length > 0 || Object.keys(server.env || {}).length > 0) && (
-                                                            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-white/5 space-y-1">
+                                                            <div className="mt-3 pt-3 border-t border-border space-y-1">
                                                                 {server.args?.length > 0 && (
                                                                     <div>
-                                                                        <span className="text-xs font-medium text-zinc-400">Args: </span>
-                                                                        <span className="text-xs text-zinc-600 dark:text-zinc-300 font-mono">{server.args.join(' ')}</span>
+                                                                        <span className="text-xs font-medium text-fg-muted">Args: </span>
+                                                                        <span className="text-xs text-fg-secondary font-mono">{server.args.join(' ')}</span>
                                                                     </div>
                                                                 )}
                                                                 {Object.keys(server.env || {}).length > 0 && (
                                                                     <div>
-                                                                        <span className="text-xs font-medium text-zinc-400">Env: </span>
-                                                                        <span className="text-xs text-zinc-600 dark:text-zinc-300 font-mono">
+                                                                        <span className="text-xs font-medium text-fg-muted">Env: </span>
+                                                                        <span className="text-xs text-fg-secondary font-mono">
                                                                             {Object.entries(server.env).map(([k, v]) => `${k}=${v.length > 20 ? v.slice(0, 20) + '...' : v}`).join(', ')}
                                                                         </span>
                                                                     </div>
@@ -764,69 +764,69 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                         )}
 
                                         {showAddMcpForm ? (
-                                            <div className="mt-4 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-white/10 p-5 space-y-4">
+                                            <div className="mt-4 bg-bg rounded-xl border border-border p-5 space-y-4">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="font-medium text-zinc-900 dark:text-white">Add Custom MCP Server</span>
+                                                    <span className="font-medium text-fg">Add Custom MCP Server</span>
                                                     <button
                                                         onClick={() => {
                                                             setShowAddMcpForm(false);
                                                             setMcpForm({ name: '', command: '', args: '', env: '' });
                                                             setMcpError(null);
                                                         }}
-                                                        className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+                                                        className="text-xs text-fg-muted hover:text-fg transition-colors"
                                                     >
                                                         Cancel
                                                     </button>
                                                 </div>
                                                 {mcpError && (
-                                                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 rounded-lg text-sm text-red-600 dark:text-red-400">
+                                                    <div className="p-3 bg-error/5 border border-error/20 rounded-lg text-sm text-error">
                                                         {mcpError}
                                                     </div>
                                                 )}
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2">
-                                                        <label className="text-xs font-medium text-zinc-500">Name</label>
+                                                        <label className="text-xs font-medium text-fg-muted">Name</label>
                                                         <input
                                                             type="text"
                                                             value={mcpForm.name}
                                                             onChange={(e) => setMcpForm({ ...mcpForm, name: e.target.value })}
                                                             placeholder="my-mcp-server"
-                                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-orange-500 transition-colors text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                                                            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg focus:outline-none focus:border-ring transition-colors text-sm text-fg placeholder:text-fg-muted"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <label className="text-xs font-medium text-zinc-500">Command</label>
+                                                        <label className="text-xs font-medium text-fg-muted">Command</label>
                                                         <input
                                                             type="text"
                                                             value={mcpForm.command}
                                                             onChange={(e) => setMcpForm({ ...mcpForm, command: e.target.value })}
                                                             placeholder="npx"
-                                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-orange-500 transition-colors text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                                                            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg focus:outline-none focus:border-ring transition-colors text-sm text-fg placeholder:text-fg-muted"
                                                         />
                                                     </div>
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-medium text-zinc-500">Arguments (one per line)</label>
+                                                    <label className="text-xs font-medium text-fg-muted">Arguments (one per line)</label>
                                                     <textarea
                                                         value={mcpForm.args}
                                                         onChange={(e) => setMcpForm({ ...mcpForm, args: e.target.value })}
                                                         placeholder={"-y\n@anthropic/mcp-server-example"}
-                                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-orange-500 transition-colors text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 min-h-[60px] resize-y font-mono"
+                                                        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg focus:outline-none focus:border-ring transition-colors text-sm text-fg placeholder:text-fg-muted min-h-[60px] resize-y font-mono"
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-medium text-zinc-500">Environment Variables (KEY=value, one per line)</label>
+                                                    <label className="text-xs font-medium text-fg-muted">Environment Variables (KEY=value, one per line)</label>
                                                     <textarea
                                                         value={mcpForm.env}
                                                         onChange={(e) => setMcpForm({ ...mcpForm, env: e.target.value })}
                                                         placeholder="API_KEY=your-key"
-                                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:border-orange-500 transition-colors text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 min-h-[60px] resize-y font-mono"
+                                                        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg focus:outline-none focus:border-ring transition-colors text-sm text-fg placeholder:text-fg-muted min-h-[60px] resize-y font-mono"
                                                     />
                                                 </div>
                                                 <button
                                                     onClick={addMcpServer}
                                                     disabled={!mcpForm.name.trim() || !mcpForm.command.trim()}
-                                                    className="w-full py-2.5 text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="w-full py-2.5 text-sm font-medium bg-fg hover:opacity-90 text-accent-fg rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     Add Server
                                                 </button>
@@ -834,7 +834,7 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                         ) : (
                                             <button
                                                 onClick={() => setShowAddMcpForm(true)}
-                                                className="mt-4 flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/10 hover:border-orange-500 rounded-xl transition-all"
+                                                className="mt-4 flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-fg-secondary hover:text-fg border border-border hover:border-fg rounded-xl transition-all"
                                             >
                                                 <PlusIcon className="w-4 h-4" />
                                                 Add Custom MCP Server
@@ -846,7 +846,7 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
 
                             {/* Advanced Tab */}
                             {activeTab === 4 && (
-                                <div className="bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-white/5 p-6 space-y-4">
+                                <div className="bg-bg-secondary rounded-2xl border border-border p-6 space-y-4">
                                     {[
                                         { label: 'Skip Permissions', desc: 'Skip file operation confirmations (use with caution)', value: skipPermissions, setter: setSkipPermissions },
                                         { label: 'Auto Commit', desc: 'Automatically commit changes after task completion', value: autoCommit, setter: setAutoCommit },
@@ -854,17 +854,17 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                     ].map((item) => (
                                         <label
                                             key={item.label}
-                                            className="flex items-center gap-4 p-4 bg-white dark:bg-zinc-800 rounded-xl cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors border border-zinc-200 dark:border-white/10"
+                                            className="flex items-center gap-4 p-4 bg-bg rounded-xl cursor-pointer hover:bg-bg-muted transition-colors border border-border"
                                         >
                                             <input
                                                 type="checkbox"
                                                 checked={item.value}
                                                 onChange={(e) => item.setter(e.target.checked)}
-                                                className="w-5 h-5 rounded border-zinc-300 dark:border-zinc-600 text-orange-500 focus:ring-orange-500/30"
+                                                className="w-5 h-5 rounded border-border-strong text-fg focus:ring-ring/30"
                                             />
                                             <div>
-                                                <span className="text-sm font-medium text-zinc-900 dark:text-white">{item.label}</span>
-                                                <p className="text-xs text-zinc-500 mt-0.5">{item.desc}</p>
+                                                <span className="text-sm font-medium text-fg">{item.label}</span>
+                                                <p className="text-xs text-fg-muted mt-0.5">{item.desc}</p>
                                             </div>
                                         </label>
                                     ))}
@@ -872,10 +872,10 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                             )}
 
                             {/* Save Button */}
-                            <div className="mt-8 flex items-center justify-end gap-3 pt-6 border-t border-zinc-200 dark:border-white/5">
+                            <div className="mt-8 flex items-center justify-end gap-3 pt-6 border-t border-border">
                                 <button
                                     onClick={onClose}
-                                    className="px-5 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-xl transition-colors"
+                                    className="px-5 py-2.5 text-sm font-medium text-fg-secondary hover:text-fg hover:bg-bg-muted rounded-xl transition-colors"
                                     disabled={isSaving}
                                 >
                                     Cancel
@@ -884,8 +884,8 @@ export function SettingsDialog({ show, onClose }: SettingsDialogProps) {
                                     onClick={handleSave}
                                     className={`flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-xl transition-all ${
                                         !isSaving
-                                            ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20'
-                                            : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
+                                            ? 'bg-fg hover:opacity-90 text-accent-fg shadow-lg'
+                                            : 'bg-bg-muted text-fg-muted cursor-not-allowed'
                                     }`}
                                     disabled={isSaving}
                                 >

@@ -51,14 +51,14 @@ const toolConfig: Record<string, { icon: typeof FolderIcon; label: string; color
     Edit: { icon: EditIcon, label: 'Edit', color: 'text-warning' },
     Glob: { icon: SearchIcon, label: 'Find', color: 'text-purple-500' },
     Grep: { icon: SearchIcon, label: 'Search', color: 'text-purple-500' },
-    Bash: { icon: TerminalIcon, label: 'Run', color: 'text-brand' },
+    Bash: { icon: TerminalIcon, label: 'Run', color: 'text-fg' },
     Task: { icon: CodeIcon, label: 'Task', color: 'text-cyan-500' },
     WebFetch: { icon: GlobeIcon, label: 'Fetch', color: 'text-blue-500' },
     WebSearch: { icon: GlobeIcon, label: 'Search Web', color: 'text-blue-500' },
 };
 
 function getToolInfo(toolName: string) {
-    return toolConfig[toolName] || { icon: TerminalIcon, label: toolName, color: 'text-text-low' };
+    return toolConfig[toolName] || { icon: TerminalIcon, label: toolName, color: 'text-fg-muted' };
 }
 
 function getToolSummary(tool: ToolUse): string {
@@ -103,8 +103,8 @@ function ToolStatusDot({ status }: { status: 'running' | 'success' | 'error' }) 
     if (status === 'running') {
         return (
             <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-fg opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-fg" />
             </span>
         );
     }
@@ -129,7 +129,7 @@ function ToolEntry({ tool, isLast }: { tool: ToolUse & { status: 'running' | 'su
         <div className="group">
             <div
                 className={`flex items-center gap-2 py-1.5 px-2 rounded-md transition-colors ${
-                    hasResult ? 'cursor-pointer hover:bg-bg-panel' : ''
+                    hasResult ? 'cursor-pointer hover:bg-bg-muted' : ''
                 }`}
                 onClick={() => hasResult && setExpanded(!expanded)}
             >
@@ -139,12 +139,12 @@ function ToolEntry({ tool, isLast }: { tool: ToolUse & { status: 'running' | 'su
                 </span>
 
                 <span className="flex-1 min-w-0 text-sm">
-                    <span className="text-text-low">{info.label}</span>
-                    <span className="ml-1.5 text-text-normal truncate">{summary}</span>
+                    <span className="text-fg-muted">{info.label}</span>
+                    <span className="ml-1.5 text-fg-secondary truncate">{summary}</span>
                 </span>
 
                 {hasResult && (
-                    <span className="text-text-low opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-fg-muted opacity-0 group-hover:opacity-100 transition-opacity">
                         {expanded ? (
                             <ChevronDownIcon className="w-3 h-3" />
                         ) : (
@@ -167,12 +167,12 @@ function ThinkingIndicator({ thinking, isStreaming }: { thinking: string; isStre
     const [expanded, setExpanded] = useState(false);
 
     return (
-        <div className="flex items-start gap-2 text-text-low">
+        <div className="flex items-start gap-2 text-fg-muted">
             <BrainIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
                 <button
                     onClick={() => setExpanded(!expanded)}
-                    className="flex items-center gap-1 text-sm hover:text-text-normal transition-colors"
+                    className="flex items-center gap-1 text-sm hover:text-fg-secondary transition-colors"
                 >
                     <span className="opacity-70">Thinking</span>
                     {isStreaming && <RunningDots size="sm" />}
@@ -253,7 +253,7 @@ export function StreamingMessage({
             )}
 
             {isStreaming && activeTool && !hasContent && (
-                <div className="flex items-center gap-3 px-4 py-3 bg-bg-panel rounded-lg border border-brand/20">
+                <div className="flex items-center gap-3 px-4 py-3 bg-bg-muted rounded-lg border border-fg/20">
                     <span className="relative">
                         {(() => {
                             const info = getToolInfo(activeTool.tool);
@@ -263,7 +263,7 @@ export function StreamingMessage({
                         <ToolStatusDot status="running" />
                     </span>
                     <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-text-high">
+                        <div className="text-sm font-medium text-fg">
                             {getToolInfo(activeTool.tool).label}: {getToolSummary(activeTool)}
                         </div>
                     </div>
@@ -272,7 +272,7 @@ export function StreamingMessage({
             )}
 
             {!hasContent && isStreaming && !activeTool && !hasThinking && (
-                <div className="flex items-center gap-3 text-text-low">
+                <div className="flex items-center gap-3 text-fg-muted">
                     <RunningDots />
                     <span className="text-sm">Starting...</span>
                 </div>
@@ -282,14 +282,14 @@ export function StreamingMessage({
                 <div className="text-sm">
                     <Markdown content={content} />
                     {isStreaming && (
-                        <span className="inline-block w-2 h-4 ml-0.5 bg-brand animate-cursor-blink rounded-sm" />
+                        <span className="inline-block w-2 h-4 ml-0.5 bg-fg animate-cursor-blink rounded-sm" />
                     )}
                 </div>
             )}
 
             {hasTools && toolsWithStatus.length > 0 && (
                 <div className="border-t border-border pt-3 mt-3">
-                    <div className="text-xs text-text-low mb-2 flex items-center gap-2">
+                    <div className="text-xs text-fg-muted mb-2 flex items-center gap-2">
                         <span>{toolsWithStatus.length} tool{toolsWithStatus.length > 1 ? 's' : ''} used</span>
                         {toolsWithStatus.filter(t => t.status === 'running').length > 0 && (
                             <RunningDots size="sm" />
@@ -320,7 +320,7 @@ export function StreamingMessage({
                                 className="flex items-center gap-2 px-2 py-1.5 bg-error/5 border border-error/10 rounded text-sm"
                             >
                                 <span className="text-error font-medium">{blocked.tool}</span>
-                                <span className="text-text-low">— {blocked.reason}</span>
+                                <span className="text-fg-muted">— {blocked.reason}</span>
                             </div>
                         ))}
                     </div>

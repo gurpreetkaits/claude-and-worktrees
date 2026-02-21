@@ -16,7 +16,7 @@ export interface ImageAttachment {
 // Status indicator component for commands/hooks
 function StatusBadge({ status }: { status: 'running' | 'completed' | 'failed' }) {
     if (status === 'running') {
-        return <span className="w-3 h-3 border-2 border-brand/30 border-t-brand rounded-full animate-spin" />;
+        return <span className="w-3 h-3 border-2 border-fg/30 border-t-brand rounded-full animate-spin" />;
     }
     if (status === 'completed') {
         return <CheckIcon className="w-3.5 h-3.5 text-success" />;
@@ -263,14 +263,14 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
     const canStart = messages.length === 0 && todo.context && !isStreaming;
 
     return (
-        <div className="h-full flex flex-col bg-bg-primary relative">
+        <div className="h-full flex flex-col bg-bg relative">
             {/* Header - sticky */}
-            <div className="flex-shrink-0 bg-bg-primary border-b border-border px-4 py-3 z-10">
+            <div className="flex-shrink-0 bg-bg border-b border-border px-4 py-3 z-10">
                 <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1">
-                        <h2 className="font-medium truncate text-text-high">{todo.title}</h2>
+                        <h2 className="font-medium truncate text-fg">{todo.title}</h2>
                         {todo.worktree && (
-                            <div className="flex items-center gap-3 mt-1 text-xs text-text-low">
+                            <div className="flex items-center gap-3 mt-1 text-xs text-fg-muted">
                                 <span className="flex items-center gap-1 truncate" title={todo.worktree.path}>
                                     <FolderIcon className="w-3 h-3 flex-shrink-0" />
                                     <span className="truncate">{todo.worktree.path}</span>
@@ -287,24 +287,24 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                     <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                         {/* Session stats badges */}
                         {(costUsd !== null || durationMs !== null || toolUses.length > 0) && (
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-bg-panel rounded-md border border-border">
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-bg-muted rounded-md border border-border">
                                 {costUsd !== null && (
-                                    <span className="text-xs text-text-normal font-medium" title="API Cost">
+                                    <span className="text-xs text-fg-secondary font-medium" title="API Cost">
                                         ${costUsd.toFixed(4)}
                                     </span>
                                 )}
                                 {costUsd !== null && durationMs !== null && (
-                                    <span className="text-text-low">·</span>
+                                    <span className="text-fg-muted">·</span>
                                 )}
                                 {durationMs !== null && (
-                                    <span className="text-xs text-text-low" title="Duration">
+                                    <span className="text-xs text-fg-muted" title="Duration">
                                         {(durationMs / 1000).toFixed(1)}s
                                     </span>
                                 )}
                                 {toolUses.length > 0 && (
                                     <>
-                                        <span className="text-text-low">·</span>
-                                        <span className="text-xs text-text-low" title="Tool calls">
+                                        <span className="text-fg-muted">·</span>
+                                        <span className="text-xs text-fg-muted" title="Tool calls">
                                             {toolUses.length} tools
                                         </span>
                                     </>
@@ -314,7 +314,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
 
                         {/* Model badge */}
                         {todo.model && (
-                            <span className="text-xs px-2 py-1 bg-brand/10 text-brand rounded-md font-medium capitalize">
+                            <span className="text-xs px-2 py-1 bg-fg/10 text-fg rounded-md font-medium capitalize">
                                 {todo.model}
                             </span>
                         )}
@@ -335,7 +335,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                         {lastUserMessageFromHistory && !isStreaming && (
                             <button
                                 onClick={() => handleRerun(lastUserMessageFromHistory.content)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-panel text-text-normal rounded-lg hover:bg-bg-secondary hover:text-text-high transition-colors text-sm"
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-muted text-fg-secondary rounded-lg hover:bg-bg-secondary hover:text-fg transition-colors text-sm"
                                 title="Rerun last message"
                             >
                                 <RerunIcon className="w-3.5 h-3.5" />
@@ -355,7 +355,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                             <div
                                 className={`flex items-center gap-1.5 px-2 py-1 rounded border ${
                                     preCommand.status === 'running'
-                                        ? 'bg-brand/10 border-brand/20'
+                                        ? 'bg-fg/10 border-fg/20'
                                         : preCommand.status === 'completed'
                                         ? 'bg-success/10 border-success/20'
                                         : 'bg-error/10 border-error/20'
@@ -363,9 +363,9 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                                 title={preCommand.error || preCommand.output || preCommand.command}
                             >
                                 <StatusBadge status={preCommand.status} />
-                                <span className="text-text-normal">Pre-command</span>
+                                <span className="text-fg-secondary">Pre-command</span>
                                 {preCommand.status === 'running' && (
-                                    <span className="text-text-low truncate max-w-[150px]">{preCommand.command}</span>
+                                    <span className="text-fg-muted truncate max-w-[150px]">{preCommand.command}</span>
                                 )}
                             </div>
                         )}
@@ -375,7 +375,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                             <div
                                 className={`flex items-center gap-1.5 px-2 py-1 rounded border ${
                                     postCommand.status === 'running'
-                                        ? 'bg-brand/10 border-brand/20'
+                                        ? 'bg-fg/10 border-fg/20'
                                         : postCommand.status === 'completed'
                                         ? 'bg-success/10 border-success/20'
                                         : 'bg-error/10 border-error/20'
@@ -383,9 +383,9 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                                 title={postCommand.error || postCommand.output || postCommand.command}
                             >
                                 <StatusBadge status={postCommand.status} />
-                                <span className="text-text-normal">Post-command</span>
+                                <span className="text-fg-secondary">Post-command</span>
                                 {postCommand.status === 'running' && (
-                                    <span className="text-text-low truncate max-w-[150px]">{postCommand.command}</span>
+                                    <span className="text-fg-muted truncate max-w-[150px]">{postCommand.command}</span>
                                 )}
                             </div>
                         )}
@@ -402,7 +402,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                                 title={hook.error || hook.output || hook.command}
                             >
                                 <StatusBadge status={hook.status} />
-                                <span className="text-text-normal capitalize">{hook.event.replace('_', ' ')}</span>
+                                <span className="text-fg-secondary capitalize">{hook.event.replace('_', ' ')}</span>
                             </div>
                         ))}
                     </div>
@@ -416,7 +416,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                 className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide"
             >
                 {messages.length === 0 && !isStreaming ? (
-                    <div className="h-full flex items-center justify-center text-text-low">
+                    <div className="h-full flex items-center justify-center text-fg-muted">
                         <div className="text-center">
                             {todo.context ? (
                                 <p>Press Start to begin</p>
@@ -446,7 +446,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                                         <div className="flex items-start gap-2 justify-end">
                                             <button
                                                 onClick={() => handleRerun(message.content)}
-                                                className="opacity-0 group-hover:opacity-100 p-1 text-text-low hover:text-brand transition-all mt-0.5"
+                                                className="opacity-0 group-hover:opacity-100 p-1 text-fg-muted hover:text-fg transition-all mt-0.5"
                                                 title="Rerun this message"
                                             >
                                                 <RerunIcon className="w-3.5 h-3.5" />
@@ -493,51 +493,51 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                             setUserScrolled(false);
                             scrollToBottom(true);
                         }}
-                        className="flex items-center gap-2 px-4 py-2 bg-bg-panel border border-border rounded-full shadow-lg hover:bg-bg-secondary transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-bg-muted border border-border rounded-full shadow-lg hover:bg-bg-secondary transition-colors"
                         title="Scroll to bottom"
                     >
-                        <svg className="w-4 h-4 text-text-normal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-fg-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                         </svg>
-                        <span className="text-sm text-text-normal">Scroll to bottom</span>
+                        <span className="text-sm text-fg-secondary">Scroll to bottom</span>
                     </button>
                 </div>
             )}
 
             {/* Input area - sticky at bottom */}
-            <div className="flex-shrink-0 border-t border-border bg-bg-primary p-4">
+            <div className="flex-shrink-0 border-t border-border bg-bg p-4">
                 {/* Queued messages indicator */}
                 {queuedMessages.length > 0 && (
                     <div className="max-w-4xl mx-auto mb-3 space-y-2">
-                        <div className="flex items-center justify-between text-xs text-text-low px-1">
-                            <span className="text-brand font-medium">{queuedMessages.length} message{queuedMessages.length > 1 ? 's' : ''} queued</span>
+                        <div className="flex items-center justify-between text-xs text-fg-muted px-1">
+                            <span className="text-fg font-medium">{queuedMessages.length} message{queuedMessages.length > 1 ? 's' : ''} queued</span>
                             {queuedMessages.length > 1 && (
                                 <button
                                     type="button"
                                     onClick={clearQueue}
-                                    className="text-text-low hover:text-error transition-colors"
+                                    className="text-fg-muted hover:text-error transition-colors"
                                 >
                                     Clear all
                                 </button>
                             )}
                         </div>
                         {queuedMessages.map((msg, index) => (
-                            <div key={index} className="flex items-center gap-2 px-3 py-2 bg-brand/10 border border-brand/20 rounded-lg text-sm">
-                                <span className="text-brand font-medium text-xs">{index + 1}.</span>
+                            <div key={index} className="flex items-center gap-2 px-3 py-2 bg-fg/10 border border-fg/20 rounded-lg text-sm">
+                                <span className="text-fg font-medium text-xs">{index + 1}.</span>
                                 <div className="flex-1 min-w-0 flex items-center gap-2">
                                     {msg.images && msg.images.length > 0 && (
-                                        <span className="text-brand text-xs">
+                                        <span className="text-fg text-xs">
                                             [{msg.images.length} image{msg.images.length > 1 ? 's' : ''}]
                                         </span>
                                     )}
-                                    <span className="text-text-normal truncate">
+                                    <span className="text-fg-secondary truncate">
                                         {msg.content.length > 60 ? msg.content.slice(0, 60) + '...' : msg.content}
                                     </span>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => clearQueueItem(index)}
-                                    className="p-1 text-text-low hover:text-error transition-colors"
+                                    className="p-1 text-fg-muted hover:text-error transition-colors"
                                     title="Remove from queue"
                                 >
                                     <XIcon className="w-4 h-4" />
@@ -585,7 +585,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                                     ? 'Or type a custom message... (paste images supported)'
                                     : 'Type a follow-up message... (Enter to send, paste images supported)'
                         }
-                        className="chat-input text-text-high placeholder:text-text-low min-h-[100px] max-h-[300px]"
+                        className="chat-input text-fg placeholder:text-fg-muted min-h-[100px] max-h-[300px]"
                         rows={4}
                         style={{ resize: 'vertical' }}
                     />
@@ -607,7 +607,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                             <button
                                 type="button"
                                 onClick={handleStart}
-                                className="flex items-center gap-2 px-4 py-2 bg-brand text-on-brand rounded-lg hover:bg-brand-hover transition-colors font-medium"
+                                className="flex items-center gap-2 px-4 py-2 bg-fg text-accent-fg rounded-lg hover:opacity-90 transition-colors font-medium"
                             >
                                 <PlayIcon className="w-4 h-4" />
                                 Start
@@ -617,7 +617,7 @@ export function TodoChat({ todo, messages, onNewMessage }: TodoChatProps) {
                             <button
                                 type="submit"
                                 disabled={!hasInput}
-                                className="flex items-center gap-2 px-4 py-2 bg-brand text-on-brand rounded-lg hover:bg-brand-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
+                                className="flex items-center gap-2 px-4 py-2 bg-fg text-accent-fg rounded-lg hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
                             >
                                 <SendIcon className="w-4 h-4" />
                                 Send

@@ -1,29 +1,14 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
-    TerminalIcon,
-    FileIcon,
-    SearchIcon,
-    EditIcon,
-    GlobeIcon,
-    ChevronDownIcon,
-    CheckIcon,
-    AlertIcon,
-    FolderIcon
+    TerminalIcon, FileIcon, SearchIcon, EditIcon, GlobeIcon,
+    ChevronDownIcon, CheckIcon, AlertIcon, FolderIcon
 } from '../ui/Icons';
 import { StatusDot } from './ChatEntryContainer';
 
-// Tool type to icon mapping
 const toolIcons: Record<string, typeof TerminalIcon> = {
-    Bash: TerminalIcon,
-    Read: FileIcon,
-    Write: EditIcon,
-    Edit: EditIcon,
-    Glob: FolderIcon,
-    Grep: SearchIcon,
-    WebFetch: GlobeIcon,
-    WebSearch: GlobeIcon,
-    Task: TerminalIcon,
+    Bash: TerminalIcon, Read: FileIcon, Write: EditIcon, Edit: EditIcon,
+    Glob: FolderIcon, Grep: SearchIcon, WebFetch: GlobeIcon, WebSearch: GlobeIcon, Task: TerminalIcon,
 };
 
 interface ToolInput {
@@ -40,10 +25,7 @@ interface ChatToolEntryProps {
     id: string;
     tool: string;
     input: ToolInput;
-    result?: {
-        content: string;
-        is_error: boolean;
-    };
+    result?: { content: string; is_error: boolean };
     className?: string;
 }
 
@@ -53,105 +35,58 @@ export function ChatToolEntry({ id, tool, input, result, className }: ChatToolEn
     const Icon = toolIcons[tool] || TerminalIcon;
     const isComplete = result !== undefined;
     const isError = result?.is_error ?? false;
-    const status: 'running' | 'success' | 'error' = isComplete
-        ? (isError ? 'error' : 'success')
-        : 'running';
+    const status: 'running' | 'success' | 'error' = isComplete ? (isError ? 'error' : 'success') : 'running';
 
-    // Get a summary of the tool input
     const getSummary = () => {
         if (input.command) {
             const cmd = input.command;
             return cmd.length > 60 ? cmd.slice(0, 60) + '...' : cmd;
         }
-        if (input.file_path) {
-            return input.file_path.split('/').pop() || input.file_path;
-        }
-        if (input.pattern) {
-            return `Pattern: ${input.pattern}`;
-        }
-        if (input.query) {
-            return input.query.length > 40 ? input.query.slice(0, 40) + '...' : input.query;
-        }
-        if (input.url) {
-            try {
-                return new URL(input.url).hostname;
-            } catch {
-                return input.url;
-            }
-        }
+        if (input.file_path) return input.file_path.split('/').pop() || input.file_path;
+        if (input.pattern) return `Pattern: ${input.pattern}`;
+        if (input.query) return input.query.length > 40 ? input.query.slice(0, 40) + '...' : input.query;
+        if (input.url) { try { return new URL(input.url).hostname; } catch { return input.url; } }
         return tool;
     };
 
     return (
-        <div
-            className={cn(
-                'rounded-lg border overflow-hidden',
-                isError ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-700',
-                className
-            )}
-        >
-            {/* Header */}
+        <div className={cn('rounded-md border overflow-hidden', isError ? 'border-error/30 bg-error/5' : 'border-border', className)}>
             <div
                 className={cn(
                     'flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors',
-                    isError ? 'bg-red-100 dark:bg-red-900/30 hover:bg-red-150 dark:hover:bg-red-900/40' : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    isError ? 'bg-error/5 hover:bg-error/10' : 'bg-bg-secondary hover:bg-bg-muted'
                 )}
                 onClick={() => setExpanded(!expanded)}
             >
                 <span className="relative flex-shrink-0">
-                    <Icon className={cn('w-4 h-4', isError ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400')} />
+                    <Icon className={cn('w-3.5 h-3.5', isError ? 'text-error' : 'text-fg-muted')} />
                     <StatusDot status={status} className="absolute -bottom-0.5 -right-0.5" />
                 </span>
-
                 <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{tool}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2 truncate">
-                        {getSummary()}
-                    </span>
+                    <span className="text-xs font-medium text-fg">{tool}</span>
+                    <span className="text-[11px] text-fg-muted ml-2 truncate">{getSummary()}</span>
                 </div>
-
                 {isComplete && (
                     <span className="flex-shrink-0">
-                        {isError ? (
-                            <AlertIcon className="w-4 h-4 text-red-500 dark:text-red-400" />
-                        ) : (
-                            <CheckIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
-                        )}
+                        {isError ? <AlertIcon className="w-3.5 h-3.5 text-error" /> : <CheckIcon className="w-3.5 h-3.5 text-success" />}
                     </span>
                 )}
-
-                <ChevronDownIcon
-                    className={cn(
-                        'w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0',
-                        !expanded && '-rotate-90'
-                    )}
-                />
+                <ChevronDownIcon className={cn('w-3.5 h-3.5 text-fg-muted transition-transform flex-shrink-0', !expanded && '-rotate-90')} />
             </div>
 
-            {/* Content */}
             {expanded && (
-                <div className="border-t border-gray-200 dark:border-gray-700">
-                    {/* Input */}
-                    <div className="px-3 py-2 bg-gray-100/50 dark:bg-gray-700/50">
-                        <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Input</div>
-                        <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all max-h-32 overflow-auto">
+                <div className="border-t border-border">
+                    <div className="px-3 py-2 bg-bg-secondary">
+                        <div className="text-[10px] font-medium text-fg-muted mb-1">Input</div>
+                        <pre className="text-[11px] text-fg-secondary font-mono whitespace-pre-wrap break-all max-h-32 overflow-auto">
                             {JSON.stringify(input, null, 2)}
                         </pre>
                     </div>
-
-                    {/* Result */}
                     {result && (
-                        <div className="px-3 py-2">
-                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                {isError ? 'Error' : 'Result'}
-                            </div>
-                            <pre className={cn(
-                                'text-xs font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto',
-                                isError ? 'text-red-500 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'
-                            )}>
-                                {result.content.length > 2000
-                                    ? result.content.slice(0, 2000) + '\n... (truncated)'
-                                    : result.content}
+                        <div className="px-3 py-2 border-t border-border">
+                            <div className="text-[10px] font-medium text-fg-muted mb-1">{isError ? 'Error' : 'Result'}</div>
+                            <pre className={cn('text-[11px] font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto', isError ? 'text-error' : 'text-fg-secondary')}>
+                                {result.content.length > 2000 ? result.content.slice(0, 2000) + '\n... (truncated)' : result.content}
                             </pre>
                         </div>
                     )}
@@ -161,14 +96,9 @@ export function ChatToolEntry({ id, tool, input, result, className }: ChatToolEn
     );
 }
 
-// Aggregated tool entries for collapsed view
+// Aggregated tool summary
 interface ChatToolSummaryProps {
-    tools: Array<{
-        id: string;
-        tool: string;
-        input: ToolInput;
-        result?: { content: string; is_error: boolean };
-    }>;
+    tools: Array<{ id: string; tool: string; input: ToolInput; result?: { content: string; is_error: boolean } }>;
     onExpand?: () => void;
     className?: string;
 }
@@ -178,56 +108,27 @@ export function ChatToolSummary({ tools, onExpand, className }: ChatToolSummaryP
     const errorCount = tools.filter(t => t.result?.is_error).length;
     const runningCount = tools.filter(t => !t.result).length;
 
-    // Group by tool type
     const toolCounts: Record<string, number> = {};
-    tools.forEach(t => {
-        toolCounts[t.tool] = (toolCounts[t.tool] || 0) + 1;
-    });
+    tools.forEach(t => { toolCounts[t.tool] = (toolCounts[t.tool] || 0) + 1; });
 
     return (
         <div
-            className={cn(
-                'flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                className
-            )}
+            className={cn('flex items-center gap-2 px-3 py-2 bg-bg-secondary rounded-md border border-border cursor-pointer hover:bg-bg-muted transition-colors', className)}
             onClick={onExpand}
         >
-            <TerminalIcon className="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
-
+            <TerminalIcon className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />
             <div className="flex-1 flex items-center gap-2 min-w-0">
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                    {tools.length} tool{tools.length > 1 ? 's' : ''}
-                </span>
-
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {Object.entries(toolCounts).map(([name, count]) =>
-                        count > 1 ? `${count}× ${name}` : name
-                    ).join(', ')}
+                <span className="text-xs text-fg-secondary">{tools.length} tool{tools.length > 1 ? 's' : ''}</span>
+                <span className="text-[11px] text-fg-muted">
+                    {Object.entries(toolCounts).map(([name, count]) => count > 1 ? `${count}x ${name}` : name).join(', ')}
                 </span>
             </div>
-
             <div className="flex items-center gap-1.5 flex-shrink-0">
-                {completedCount > 0 && (
-                    <span className="flex items-center gap-0.5 text-xs text-green-500 dark:text-green-400">
-                        <CheckIcon className="w-3 h-3" />
-                        {completedCount}
-                    </span>
-                )}
-                {errorCount > 0 && (
-                    <span className="flex items-center gap-0.5 text-xs text-red-500 dark:text-red-400">
-                        <AlertIcon className="w-3 h-3" />
-                        {errorCount}
-                    </span>
-                )}
-                {runningCount > 0 && (
-                    <span className="flex items-center gap-0.5 text-xs text-gray-600 dark:text-gray-400">
-                        <span className="w-2 h-2 border border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-400 rounded-full animate-spin" />
-                        {runningCount}
-                    </span>
-                )}
+                {completedCount > 0 && <span className="flex items-center gap-0.5 text-[11px] text-success"><CheckIcon className="w-3 h-3" />{completedCount}</span>}
+                {errorCount > 0 && <span className="flex items-center gap-0.5 text-[11px] text-error"><AlertIcon className="w-3 h-3" />{errorCount}</span>}
+                {runningCount > 0 && <span className="flex items-center gap-0.5 text-[11px] text-fg-muted"><span className="w-2 h-2 border border-border border-t-fg-muted rounded-full animate-spin" />{runningCount}</span>}
             </div>
-
-            <ChevronDownIcon className="w-4 h-4 text-gray-500 dark:text-gray-400 -rotate-90" />
+            <ChevronDownIcon className="w-3.5 h-3.5 text-fg-muted -rotate-90" />
         </div>
     );
 }

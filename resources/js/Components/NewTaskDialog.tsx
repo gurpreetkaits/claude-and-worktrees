@@ -31,15 +31,9 @@ const modelDisplayNames: Record<ClaudeModel, string> = {
 };
 
 export function NewTaskDialog({
-    show,
-    worktrees,
-    models = defaultModels,
-    defaultWorktree,
-    defaultProjectsPath,
-    defaultModel = 'sonnet',
-    defaultContext = '',
-    onClose,
-    onTaskCreated,
+    show, worktrees, models = defaultModels, defaultWorktree,
+    defaultProjectsPath, defaultModel = 'sonnet', defaultContext = '',
+    onClose, onTaskCreated,
 }: NewTaskDialogProps) {
     const [selectedWorktree, setSelectedWorktree] = useState<Worktree | null>(defaultWorktree || null);
     const [title, setTitle] = useState('');
@@ -50,26 +44,12 @@ export function NewTaskDialog({
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const modelDropdownRef = useRef<HTMLDivElement>(null);
 
+    useEffect(() => { setWorktreeList(worktrees); }, [worktrees]);
+    useEffect(() => { if (defaultWorktree) setSelectedWorktree(defaultWorktree); }, [defaultWorktree]);
     useEffect(() => {
-        setWorktreeList(worktrees);
-    }, [worktrees]);
-
-    useEffect(() => {
-        if (defaultWorktree) {
-            setSelectedWorktree(defaultWorktree);
-        }
-    }, [defaultWorktree]);
-
-    // Reset form when dialog opens
-    useEffect(() => {
-        if (show) {
-            setTitle('');
-            setContext(defaultContext);
-            setModel(defaultModel);
-        }
+        if (show) { setTitle(''); setContext(defaultContext); setModel(defaultModel); }
     }, [show, defaultModel, defaultContext]);
 
-    // Close model dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
@@ -80,10 +60,8 @@ export function NewTaskDialog({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Cmd/Ctrl+Enter to submit
     useEffect(() => {
         if (!show) return;
-
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -93,7 +71,6 @@ export function NewTaskDialog({
                 }
             }
         };
-
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [show, selectedWorktree, title, context, isSubmitting]);
@@ -101,22 +78,13 @@ export function NewTaskDialog({
     const handleCreateWorktree = async (path: string, name: string, branch: string | null) => {
         try {
             const response = await axios.post<{ id: number; name: string; path: string; branch: string | null }>(
-                route('worktrees.store'),
-                { path, name },
-                { headers: { 'Accept': 'application/json' } }
+                route('worktrees.store'), { path, name }, { headers: { 'Accept': 'application/json' } }
             );
-
             const newWorktree: Worktree = {
                 id: response.data?.id || Date.now(),
-                name: name,
-                path: path,
-                branch: branch,
-                base_branch: 'main',
-                is_main: false,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                name, path, branch, base_branch: 'main', is_main: false,
+                created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
             };
-
             setWorktreeList((prev) => [newWorktree, ...prev]);
             setSelectedWorktree(newWorktree);
         } catch (error) {
@@ -128,26 +96,15 @@ export function NewTaskDialog({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedWorktree || !title.trim() || !context.trim()) return;
-
         setIsSubmitting(true);
-
         try {
             const response = await axios.post<{ id: number }>(
                 route('todos.store', selectedWorktree.id),
-                {
-                    title: title.trim(),
-                    context: context.trim(),
-                    model,
-                },
+                { title: title.trim(), context: context.trim(), model },
                 { headers: { 'Accept': 'application/json' } }
             );
-
             onClose();
-
-            if (onTaskCreated) {
-                onTaskCreated(response.data.id);
-            }
-
+            if (onTaskCreated) onTaskCreated(response.data.id);
             router.reload({ only: ['todos'] });
         } catch (error) {
             console.error('Failed to create task:', error);
@@ -161,64 +118,48 @@ export function NewTaskDialog({
     return (
         <Transition show={show} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={onClose}>
-                <TransitionChild
-                    as={Fragment}
-                    enter="ease-out duration-200"
-                    enterFrom="opacity-0"
-                    enterTo="opacity-100"
-                    leave="ease-in duration-150"
-                    leaveFrom="opacity-100"
-                    leaveTo="opacity-0"
+                <TransitionChild as={Fragment}
+                    enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100"
+                    leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0"
                 >
                     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
                 </TransitionChild>
 
                 <div className="fixed inset-0 overflow-y-auto">
                     <div className="flex min-h-full items-center justify-center p-4">
-                        <TransitionChild
-                            as={Fragment}
-                            enter="ease-out duration-200"
-                            enterFrom="opacity-0 scale-95"
-                            enterTo="opacity-100 scale-100"
-                            leave="ease-in duration-150"
-                            leaveFrom="opacity-100 scale-100"
-                            leaveTo="opacity-0 scale-95"
+                        <TransitionChild as={Fragment}
+                            enter="ease-out duration-200" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
+                            leave="ease-in duration-150" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
                         >
-                            <DialogPanel className="w-full max-w-xl transform rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl transition-all overflow-visible">
-                                {/* Close button */}
+                            <DialogPanel className="w-full max-w-xl transform rounded-lg bg-bg border border-border shadow-2xl transition-all overflow-visible">
                                 <button
                                     type="button"
                                     onClick={onClose}
-                                    className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors z-10"
+                                    className="absolute top-3 right-3 p-1.5 text-fg-muted hover:text-fg hover:bg-bg-muted rounded-md transition-colors z-10"
                                 >
                                     <XIcon className="w-4 h-4" />
                                 </button>
 
-                                {/* Form */}
                                 <form id="new-task-form" onSubmit={handleSubmit} className="p-5 space-y-4">
-                                    {/* Title */}
                                     <input
                                         type="text"
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
                                         placeholder="Task title"
-                                        className="w-full px-4 py-3 text-lg font-medium bg-transparent border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+                                        className="w-full px-4 py-3 text-base font-medium bg-transparent border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-fg placeholder:text-fg-muted"
                                         autoFocus
                                         required
                                     />
 
-                                    {/* Context/Description */}
                                     <textarea
                                         value={context}
                                         onChange={(e) => setContext(e.target.value)}
                                         placeholder="Describe what you want Claude to do..."
-                                        className="w-full px-4 py-3 text-sm bg-transparent border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 min-h-[100px] resize-none"
+                                        className="w-full px-4 py-3 text-sm bg-transparent border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-fg placeholder:text-fg-muted min-h-[100px] resize-none"
                                         required
                                     />
 
-                                    {/* Bottom row: Repository and Model */}
                                     <div className="flex items-start gap-3">
-                                        {/* Repository Selection */}
                                         <div className="flex-1">
                                             <WorktreeSelector
                                                 worktrees={worktreeList}
@@ -229,42 +170,30 @@ export function NewTaskDialog({
                                             />
                                         </div>
 
-                                        {/* Model Selection Dropdown */}
                                         <div className="relative" ref={modelDropdownRef}>
                                             <button
                                                 type="button"
                                                 onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                                className="flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors text-sm min-w-[100px]"
+                                                className="flex items-center justify-between gap-2 px-4 py-2.5 bg-bg-secondary border border-border rounded-md hover:border-border-strong focus:outline-none focus:ring-1 focus:ring-ring transition-colors text-sm min-w-[100px]"
                                             >
-                                                <span className="text-gray-900 dark:text-gray-100">{modelDisplayNames[model]}</span>
-                                                <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
+                                                <span className="text-fg">{modelDisplayNames[model]}</span>
+                                                <ChevronDownIcon className={`w-3.5 h-3.5 text-fg-muted transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
                                             </button>
 
                                             {showModelDropdown && (
-                                                <div className="absolute z-[9999] mt-1 right-0 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden">
+                                                <div className="absolute z-[9999] mt-1 right-0 w-48 bg-bg border border-border rounded-md shadow-xl overflow-hidden">
                                                     {(Object.keys(models) as ClaudeModel[]).map((modelKey) => (
                                                         <button
                                                             key={modelKey}
                                                             type="button"
-                                                            onClick={() => {
-                                                                setModel(modelKey);
-                                                                setShowModelDropdown(false);
-                                                            }}
-                                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                                                                model === modelKey ? 'bg-gray-100 dark:bg-gray-700' : ''
-                                                            }`}
+                                                            onClick={() => { setModel(modelKey); setShowModelDropdown(false); }}
+                                                            className={`w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-bg-muted transition-colors ${model === modelKey ? 'bg-bg-muted' : ''}`}
                                                         >
                                                             <div>
-                                                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                                                    {modelDisplayNames[modelKey]}
-                                                                </div>
-                                                                <div className="text-xs text-gray-500">
-                                                                    {models[modelKey].description}
-                                                                </div>
+                                                                <div className="text-xs font-medium text-fg">{modelDisplayNames[modelKey]}</div>
+                                                                <div className="text-[11px] text-fg-muted">{models[modelKey].description}</div>
                                                             </div>
-                                                            {model === modelKey && (
-                                                                <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                                                            )}
+                                                            {model === modelKey && <div className="w-1.5 h-1.5 rounded-full bg-fg" />}
                                                         </button>
                                                     ))}
                                                 </div>
@@ -272,29 +201,25 @@ export function NewTaskDialog({
                                         </div>
                                     </div>
 
-                                    {/* Actions */}
                                     <div className="flex items-center justify-between pt-2">
-                                        <div className="text-xs text-gray-500">
-                                            <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] font-mono text-gray-600 dark:text-gray-400">
+                                        <div className="text-[11px] text-fg-muted">
+                                            <kbd className="px-1.5 py-0.5 bg-bg-muted rounded text-[10px] font-mono text-fg-muted border border-border">
                                                 {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter
                                             </kbd>
                                             <span className="ml-1.5">to create</span>
                                         </div>
                                         <button
                                             type="submit"
-                                            className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-lg transition-all ${
+                                            className={`flex items-center gap-2 px-5 py-2 text-xs font-medium rounded-md transition-all ${
                                                 isFormValid && !isSubmitting
-                                                    ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                                                    ? 'bg-fg text-accent-fg hover:opacity-90'
+                                                    : 'bg-bg-muted text-fg-muted cursor-not-allowed'
                                             }`}
                                             disabled={!isFormValid || isSubmitting}
                                         >
                                             {isSubmitting ? (
                                                 <>
-                                                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                                    </svg>
+                                                    <span className="w-3.5 h-3.5 border-[1.5px] border-accent-fg/30 border-t-accent-fg rounded-full animate-spin" />
                                                     Creating...
                                                 </>
                                             ) : (

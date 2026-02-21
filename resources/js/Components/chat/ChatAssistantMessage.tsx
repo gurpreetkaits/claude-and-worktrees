@@ -9,11 +9,11 @@ interface ChatAssistantMessageProps {
 
 export function ChatAssistantMessage({ content, isStreaming, className }: ChatAssistantMessageProps) {
     return (
-        <div className={cn('max-w-4xl space-y-4', className)}>
-            <div className="text-base text-gray-700 dark:text-gray-300 leading-relaxed">
+        <div className={cn('space-y-4', className)}>
+            <div className="text-sm text-fg leading-relaxed">
                 <Markdown content={content} />
                 {isStreaming && (
-                    <span className="inline-block w-2 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
+                    <span className="streaming-cursor align-text-bottom rounded-sm" />
                 )}
             </div>
         </div>

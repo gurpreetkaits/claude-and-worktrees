@@ -15,38 +15,24 @@ export function ChatThinking({ content, className }: ChatThinkingProps) {
     const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
 
     return (
-        <div
-            className={cn(
-                'rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 overflow-hidden',
-                className
-            )}
-        >
+        <div className={cn('rounded-md border border-border overflow-hidden', className)}>
             <div
-                className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-100/50 dark:hover:bg-gray-700/50 transition-colors"
+                className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-bg-muted transition-colors"
                 onClick={() => setExpanded(!expanded)}
             >
-                <BrainIcon className="w-4 h-4 text-gray-500 dark:text-gray-400 mt-0.5 flex-shrink-0 animate-pulse" />
-
+                <BrainIcon className="w-4 h-4 text-fg-muted mt-0.5 flex-shrink-0 animate-pulse-subtle" />
                 <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Thinking</span>
+                    <span className="text-xs font-medium text-fg-muted">Thinking</span>
                     {!expanded && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 italic truncate">
-                            {preview}
-                        </p>
+                        <p className="text-[11px] text-fg-muted mt-0.5 italic truncate">{preview}</p>
                     )}
                 </div>
-
-                <ChevronDownIcon
-                    className={cn(
-                        'w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0',
-                        !expanded && '-rotate-90'
-                    )}
-                />
+                <ChevronDownIcon className={cn('w-3.5 h-3.5 text-fg-muted transition-transform flex-shrink-0', !expanded && '-rotate-90')} />
             </div>
 
             {expanded && (
-                <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700">
-                    <pre className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-auto">
+                <div className="px-3 py-2 border-t border-border bg-bg-secondary">
+                    <pre className="text-[11px] text-fg-muted whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-auto">
                         {content}
                     </pre>
                 </div>

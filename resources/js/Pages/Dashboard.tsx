@@ -1,6 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import React, { useState, useEffect, useMemo, Fragment, useCallback, useRef } from 'react';
-import { PageProps, Worktree, Todo, GitStatus, ClaudeModelsConfig, UserSettings } from '@/types';
+import { PageProps, Worktree, Todo, GitStatus, ClaudeModelsConfig, UserSettings, TodoStatus } from '@/types';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Dialog, DialogPanel, Transition, TransitionChild } from '@headlessui/react';
 import {
@@ -20,7 +20,6 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-// CommandPalette removed - using inline search instead
 import { NewTaskDialog } from '@/Components/NewTaskDialog';
 import { SettingsDialog } from '@/Components/SettingsDialog';
 import { ChatConversation } from '@/Components/chat';
@@ -29,7 +28,7 @@ import { TerminalPanel } from '@/Components/TerminalPanel';
 import { KeyboardShortcutsHelp } from '@/Components/KeyboardShortcutsHelp';
 import { useTaskSwitcher } from '@/hooks/useTaskSwitcher';
 import { useKeyboardShortcuts, ShortcutAction } from '@/hooks/useKeyboardShortcuts';
-import { useRunningSessions } from '@/hooks/useConcurrentSessions';
+import { useRunningSessions, requestNotificationPermission } from '@/hooks/useConcurrentSessions';
 import {
     PlusIcon,
     SearchIcon,
@@ -62,6 +61,13 @@ interface DashboardProps extends PageProps {
     settings?: UserSettings;
 }
 
+// Status group configuration
+const STATUS_GROUPS: { key: string; label: string; statuses: TodoStatus[]; dotClass: string }[] = [
+    { key: 'in_progress', label: 'In Progress', statuses: ['running', 'pending'], dotClass: 'bg-fg' },
+    { key: 'qa', label: 'QA', statuses: ['qa'], dotClass: 'bg-warning' },
+    { key: 'done', label: 'Done', statuses: ['completed'], dotClass: 'bg-success' },
+];
+
 export default function Dashboard({
     worktrees,
     todos,
@@ -74,15 +80,14 @@ export default function Dashboard({
 }: DashboardProps) {
     const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
     const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-    const [rightPanel, setRightPanel] = useState<'changes' | 'terminal' | null>('changes');
+    const [rightPanel, setRightPanel] = useState<'changes' | 'terminal' | null>(null);
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
     const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [showSearchResults, setShowSearchResults] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
-    // Filter out archived tasks for display
+    // Filter out archived tasks
     const activeTodos = useMemo(() => todos.filter(t => !t.is_archived), [todos]);
     const archivedTodos = useMemo(() => todos.filter(t => t.is_archived), [todos]);
     const [showArchived, setShowArchived] = useState(false);
@@ -90,7 +95,6 @@ export default function Dashboard({
     // Ordered todos for drag and drop
     const [orderedTodoIds, setOrderedTodoIds] = useState<number[]>(() => todos.map(t => t.id));
 
-    // Update ordered IDs when todos change (e.g., new task added)
     useEffect(() => {
         const currentIds = new Set(orderedTodoIds);
         const newIds = todos.map(t => t.id);
@@ -98,24 +102,21 @@ export default function Dashboard({
         const hasRemovedTodos = orderedTodoIds.some(id => !newIds.includes(id));
 
         if (hasNewTodos || hasRemovedTodos) {
-            // Keep existing order, add new todos at the start, remove deleted ones
             const existingOrdered = orderedTodoIds.filter(id => newIds.includes(id));
             const newTodoIds = newIds.filter(id => !currentIds.has(id));
             setOrderedTodoIds([...newTodoIds, ...existingOrdered]);
         }
     }, [todos]);
 
-    // Filter tasks based on search query, maintaining order
+    // Filter + order tasks
     const displayedTodos = useMemo(() => {
         const baseTodos = showArchived ? todos : activeTodos;
         const todoMap = new Map(baseTodos.map(t => [t.id, t]));
 
-        // Get todos in the correct order
         let ordered = orderedTodoIds
             .filter(id => todoMap.has(id))
             .map(id => todoMap.get(id)!);
 
-        // Add any todos that aren't in orderedTodoIds (shouldn't happen, but safety)
         const orderedSet = new Set(orderedTodoIds);
         const unordered = baseTodos.filter(t => !orderedSet.has(t.id));
         ordered = [...unordered, ...ordered];
@@ -129,29 +130,37 @@ export default function Dashboard({
         );
     }, [todos, activeTodos, showArchived, searchQuery, worktrees, orderedTodoIds]);
 
-    // Drag and drop sensors
+    // Group tasks by status
+    const groupedTodos = useMemo(() => {
+        const groups: Record<string, Todo[]> = {};
+        STATUS_GROUPS.forEach(g => { groups[g.key] = []; });
+        groups['other'] = [];
+
+        displayedTodos.forEach(todo => {
+            const group = STATUS_GROUPS.find(g => g.statuses.includes(todo.status));
+            if (group) {
+                groups[group.key].push(todo);
+            } else {
+                groups['other'].push(todo);
+            }
+        });
+
+        return groups;
+    }, [displayedTodos]);
+
+    // Drag and drop
     const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8,
-            },
-        }),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
 
-    // Handle drag end
     const handleDragEnd = useCallback((event: DragEndEvent) => {
         const { active, over } = event;
-
         if (over && active.id !== over.id) {
             setOrderedTodoIds((items) => {
                 const oldIndex = items.indexOf(Number(active.id));
                 const newIndex = items.indexOf(Number(over.id));
                 const newOrder = arrayMove(items, oldIndex, newIndex);
-
-                // Persist to backend
                 fetch(route('todos.reorder'), {
                     method: 'POST',
                     headers: {
@@ -160,13 +169,12 @@ export default function Dashboard({
                     },
                     body: JSON.stringify({ orderedIds: newOrder }),
                 });
-
                 return newOrder;
             });
         }
     }, []);
 
-    // Fast task switching with caching
+    // Task switching
     const {
         activeTodo: selectedTodo,
         messages: cachedMessages,
@@ -182,53 +190,48 @@ export default function Dashboard({
         initialActiveTodo: activeTodo,
     });
 
-    // Use selectedTodo from hook, fall back to prop
     const currentTodo = selectedTodo || activeTodo;
     const currentWorktree = currentTodo ? worktrees.find(w => w.id === currentTodo.worktree_id) : activeWorktree;
 
-    // Auto-select first task if none selected
     useEffect(() => {
         if (!currentTodo && displayedTodos.length > 0) {
             switchToTask(displayedTodos[0].id);
         }
     }, [currentTodo, displayedTodos, switchToTask]);
 
-    // Create worktree lookup by id
     const worktreeById = useMemo(() => {
         const lookup: Record<number, Worktree> = {};
-        worktrees.forEach((wt) => {
-            lookup[wt.id] = wt;
-        });
+        worktrees.forEach((wt) => { lookup[wt.id] = wt; });
         return lookup;
     }, [worktrees]);
 
     const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
-
-    // Get running sessions to track running tasks
     const runningSessions = useRunningSessions();
 
-    // Handle keyboard shortcut actions
+    // Notification permission
+    useEffect(() => {
+        const handler = () => {
+            requestNotificationPermission();
+            window.removeEventListener('click', handler);
+            window.removeEventListener('keydown', handler);
+        };
+        window.addEventListener('click', handler);
+        window.addEventListener('keydown', handler);
+        return () => {
+            window.removeEventListener('click', handler);
+            window.removeEventListener('keydown', handler);
+        };
+    }, []);
+
+    // Keyboard shortcuts
     const handleShortcutAction = useCallback((action: ShortcutAction) => {
         switch (action) {
-            case 'NEW_TASK':
-                setShowNewTaskDialog(true);
-                break;
-            case 'SEARCH':
-                // Focus the search input
-                searchInputRef.current?.focus();
-                break;
-            case 'SETTINGS':
-                setShowSettingsDialog(true);
-                break;
-            case 'NEXT_TASK':
-                switchToNext();
-                break;
-            case 'PREV_TASK':
-                switchToPrevious();
-                break;
-            case 'TOGGLE_CHANGES':
-                setRightPanel(prev => prev === 'changes' ? null : 'changes');
-                break;
+            case 'NEW_TASK': setShowNewTaskDialog(true); break;
+            case 'SEARCH': searchInputRef.current?.focus(); break;
+            case 'SETTINGS': setShowSettingsDialog(true); break;
+            case 'NEXT_TASK': switchToNext(); break;
+            case 'PREV_TASK': switchToPrevious(); break;
+            case 'TOGGLE_CHANGES': setRightPanel(prev => prev === 'changes' ? null : 'changes'); break;
             case 'CANCEL_STREAM':
                 setOpenMenuId(null);
                 setSearchQuery('');
@@ -236,284 +239,63 @@ export default function Dashboard({
                 setShowSettingsDialog(false);
                 setShowKeyboardHelp(false);
                 break;
-            case 'HELP':
-                setShowKeyboardHelp(true);
-                break;
-            case 'FOCUS_INPUT':
-                // Focus is handled by the chat component
-                break;
+            case 'HELP': setShowKeyboardHelp(true); break;
+            case 'FOCUS_INPUT': break;
         }
     }, [switchToNext, switchToPrevious]);
 
-    // Use the keyboard shortcuts hook
     const { sequenceBuffer } = useKeyboardShortcuts({
         onAction: handleShortcutAction,
         enabled: true,
     });
 
-    // Also handle number keys for task switching (1-9)
+    // Number keys 1-9
     useEffect(() => {
         const handleNumberKeys = (e: KeyboardEvent) => {
-            // Ignore if typing in an input
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-                return;
-            }
-            // Number keys 1-9 to switch tasks
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
             if (e.key >= '1' && e.key <= '9' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-                const index = parseInt(e.key) - 1;
-                switchToIndex(index);
+                switchToIndex(parseInt(e.key) - 1);
             }
         };
-
         window.addEventListener('keydown', handleNumberKeys);
         return () => window.removeEventListener('keydown', handleNumberKeys);
     }, [switchToIndex]);
 
-    // Close menu when clicking outside
+    // Close menu on outside click
     useEffect(() => {
-        const handleClickOutside = () => {
-            setOpenMenuId(null);
-            setMenuPosition(null);
-        };
         if (openMenuId !== null) {
+            const handleClickOutside = () => { setOpenMenuId(null); setMenuPosition(null); };
             document.addEventListener('click', handleClickOutside);
             return () => document.removeEventListener('click', handleClickOutside);
         }
     }, [openMenuId]);
 
-    const handleNewTask = () => {
-        setShowNewTaskDialog(true);
-    };
+    const handleNewTask = () => setShowNewTaskDialog(true);
 
     const handleArchiveTask = (todoId: number) => {
-        router.post(route('todos.archive', todoId), {}, {
-            preserveScroll: true,
-        });
+        router.post(route('todos.archive', todoId), {}, { preserveScroll: true });
         setOpenMenuId(null);
     };
 
     const handleDuplicateTask = (todoId: number) => {
-        router.post(route('todos.duplicate', todoId), {}, {
-            preserveScroll: true,
-            onSuccess: () => {
-                // The new task will be added to the list automatically via Inertia
-            },
-        });
+        router.post(route('todos.duplicate', todoId), {}, { preserveScroll: true });
         setOpenMenuId(null);
     };
 
-    // Search results for dropdown
-    const searchResults = useMemo(() => {
-        if (!searchQuery.trim()) return [];
-        const query = searchQuery.toLowerCase();
-        return todos.filter(todo =>
-            todo.title.toLowerCase().includes(query) ||
-            todo.description?.toLowerCase().includes(query) ||
-            todo.context?.toLowerCase().includes(query) ||
-            worktrees.find(w => w.id === todo.worktree_id)?.name.toLowerCase().includes(query)
-        ).slice(0, 5);
-    }, [searchQuery, todos, worktrees]);
-
-    const handleSearchResultClick = (todoId: number) => {
-        switchToTask(todoId);
-        setSearchQuery('');
-        setShowSearchResults(false);
-        searchInputRef.current?.blur();
+    const handleStatusChange = (todoId: number, newStatus: TodoStatus) => {
+        router.patch(route('todos.update', todoId), { status: newStatus }, { preserveScroll: true });
+        setOpenMenuId(null);
+        setMenuPosition(null);
     };
 
-    // VS Code style Title Bar
-    const TitleBar = () => (
-        <div className="h-12 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 select-none shrink-0">
-            {/* Left - App icon and menu */}
-            <div className="flex items-center gap-2 min-w-[160px]">
-                <BrainIcon className="w-5 h-5 text-orange-500" />
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 hidden sm:inline">Claude Worktree</span>
-            </div>
-
-            {/* Center - Search input with dropdown */}
-            <div className="flex-1 flex justify-center px-4">
-                <div className="relative w-full max-w-lg">
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                            <SearchIcon className="w-4 h-4 text-gray-400" />
-                        </div>
-                        <input
-                            ref={searchInputRef}
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setShowSearchResults(true);
-                            }}
-                            onFocus={() => setShowSearchResults(true)}
-                            onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
-                            placeholder="Search tasks... (⌘K)"
-                            className="w-full pl-10 pr-10 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        />
-                        {searchQuery && (
-                            <button
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setShowSearchResults(false);
-                                }}
-                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            >
-                                <XIcon className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Search Results Dropdown */}
-                    {showSearchResults && searchQuery && searchResults.length > 0 && (
-                        <ul className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-2 z-[9999] max-h-80 overflow-y-auto">
-                            {searchResults.map((todo) => {
-                                const worktree = worktreeById[todo.worktree_id];
-                                const isRunning = runningSessions.includes(todo.id);
-                                return (
-                                    <li key={todo.id}>
-                                        <button
-                                            onClick={() => handleSearchResultClick(todo.id)}
-                                            className="w-full flex flex-col items-start gap-1 py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                                        >
-                                            <div className="flex items-center gap-2 w-full">
-                                                {isRunning ? (
-                                                    <span className="w-4 h-4 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin flex-shrink-0" />
-                                                ) : todo.status === 'completed' ? (
-                                                    <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                                ) : (
-                                                    <CircleIcon className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0" />
-                                                )}
-                                                <span className="font-medium text-sm truncate flex-1 text-left text-gray-900 dark:text-gray-100">{todo.title}</span>
-                                            </div>
-                                            {worktree && (
-                                                <div className="flex items-center gap-2 text-xs text-gray-500 ml-6">
-                                                    <span className="flex items-center gap-1">
-                                                        <FolderIcon className="w-3 h-3" />
-                                                        {worktree.name}
-                                                    </span>
-                                                    {worktree.branch && (
-                                                        <span className="flex items-center gap-1">
-                                                            <GitBranchIcon className="w-3 h-3" />
-                                                            {worktree.branch}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </button>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    )}
-
-                    {showSearchResults && searchQuery && searchResults.length === 0 && (
-                        <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 p-4 z-[9999]">
-                            <p className="text-sm text-gray-500 text-center">No tasks found</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Right - Action buttons */}
-            <div className="flex items-center gap-1 min-w-[160px] justify-end">
-                {/* New Task */}
-                <button
-                    onClick={handleNewTask}
-                    className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                    title="New Task (N)"
-                >
-                    <PlusIcon className="w-5 h-5" />
-                </button>
-
-                {/* Git Changes */}
-                {currentTodo && currentWorktree && (
-                    <button
-                        onClick={() => setRightPanel(prev => prev === 'changes' ? null : 'changes')}
-                        className={`p-2 rounded-lg transition-colors ${
-                            rightPanel === 'changes'
-                                ? 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
-                        }`}
-                        title={rightPanel === 'changes' ? 'Hide Changes' : 'Show Changes'}
-                    >
-                        <GitDiffIcon className="w-5 h-5" />
-                    </button>
-                )}
-
-                {/* Terminal */}
-                {currentTodo && currentWorktree && (
-                    <button
-                        onClick={() => setRightPanel(prev => prev === 'terminal' ? null : 'terminal')}
-                        className={`p-2 rounded-lg transition-colors ${
-                            rightPanel === 'terminal'
-                                ? 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
-                        }`}
-                        title={rightPanel === 'terminal' ? 'Hide Terminal' : 'Show Terminal'}
-                    >
-                        <TerminalIcon className="w-5 h-5" />
-                    </button>
-                )}
-
-                {/* Settings */}
-                <button
-                    onClick={() => setShowSettingsDialog(true)}
-                    className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                    title="Settings (,)"
-                >
-                    <SettingsIcon className="w-5 h-5" />
-                </button>
-            </div>
-        </div>
-    );
-
-
-    // VS Code style Status Bar
-    const StatusBar = () => (
-        <div className="h-6 bg-orange-500 flex items-center px-3 text-white text-xs shrink-0">
-            <div className="flex items-center gap-3">
-                {currentTodo && currentWorktree && (
-                    <>
-                        <span className="flex items-center gap-1">
-                            <GitBranchIcon className="w-3.5 h-3.5" />
-                            {currentWorktree.branch || 'main'}
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <FolderIcon className="w-3.5 h-3.5" />
-                            {currentWorktree.name}
-                        </span>
-                    </>
-                )}
-            </div>
-            <div className="flex-1" />
-            <div className="flex items-center gap-3">
-                <span>{displayedTodos.length} tasks</span>
-                {runningSessions.length > 0 && (
-                    <span className="flex items-center gap-1">
-                        <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        {runningSessions.length} running
-                    </span>
-                )}
-            </div>
-        </div>
-    );
-
-    // Sortable Task Card Component
+    // Sortable Task Card
     const SortableTaskCard = ({ todo, index }: { todo: Todo; index: number }) => {
-        const {
-            attributes,
-            listeners,
-            setNodeRef,
-            transform,
-            transition,
-            isDragging,
-        } = useSortable({ id: todo.id });
-
+        const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
         const style = {
             transform: CSS.Transform.toString(transform),
             transition,
             opacity: isDragging ? 0.5 : 1,
-            zIndex: isDragging ? 1000 : 'auto',
+            zIndex: isDragging ? 1000 : 'auto' as const,
         };
 
         const worktree = worktreeById[todo.worktree_id];
@@ -524,82 +306,64 @@ export default function Dashboard({
             <div
                 ref={setNodeRef}
                 style={style}
-                className={`group cursor-pointer transition-colors ${
+                className={`group cursor-pointer transition-all duration-150 rounded-md mx-1 ${
                     isDragging
-                        ? 'bg-white dark:bg-gray-800 shadow-lg rounded-lg'
-                        : isRunning
-                        ? 'bg-orange-50 dark:bg-orange-900/10 border-l-2 border-orange-500'
+                        ? 'bg-bg shadow-lg ring-1 ring-border'
                         : isActive
-                        ? 'bg-white dark:bg-gray-800 border-l-2 border-orange-500'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 border-l-2 border-transparent'
-                } ${todo.is_archived ? 'opacity-50' : ''}`}
+                        ? 'bg-bg-muted ring-1 ring-border-strong'
+                        : 'hover:bg-bg-muted'
+                } ${todo.is_archived ? 'opacity-40' : ''}`}
                 onClick={() => switchToTask(todo.id)}
             >
-                <div className="flex items-start gap-2 px-3 py-3">
+                <div className="flex items-start gap-2 px-2.5 py-2">
                     {/* Drag Handle */}
                     <div
                         {...attributes}
                         {...listeners}
-                        className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5 cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400"
+                        className="w-4 h-4 flex items-center justify-center shrink-0 mt-0.5 cursor-grab active:cursor-grabbing text-fg-muted hover:text-fg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <GripVerticalIcon className="w-4 h-4" />
+                        <GripVerticalIcon className="w-3.5 h-3.5" />
                     </div>
 
                     {/* Status indicator */}
-                    <div className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-4 h-4 flex items-center justify-center shrink-0 mt-0.5">
                         {isRunning ? (
-                            <span className="w-4 h-4 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+                            <span className="w-3.5 h-3.5 border-2 border-fg-muted border-t-fg rounded-full animate-spin" />
                         ) : todo.status === 'completed' ? (
-                            <CheckCircleIcon className="w-4 h-4 text-green-500" />
+                            <CheckCircleIcon className="w-4 h-4 text-success" />
+                        ) : todo.status === 'qa' ? (
+                            <span className="w-3 h-3 rounded-full bg-warning" />
                         ) : (
-                            <CircleIcon className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                            <CircleIcon className="w-4 h-4 text-fg-muted" />
                         )}
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                        {/* Title row */}
-                        <div className="flex items-center gap-2">
-                            <span className={`text-sm truncate ${isActive || isRunning ? 'text-gray-900 dark:text-gray-100 font-medium' : 'text-gray-700 dark:text-gray-300'}`}>
+                        <div className="flex items-center gap-1.5">
+                            <span className={`text-[13px] truncate ${isActive ? 'text-fg font-medium' : 'text-fg-secondary'}`}>
                                 {todo.title}
                             </span>
                             {isRunning && (
-                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded">
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-fg text-accent-fg rounded">
                                     Running
                                 </span>
                             )}
-                            {!isRunning && index < 9 && (
-                                <kbd className="px-1 py-0.5 text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 rounded shrink-0">
-                                    {index + 1}
-                                </kbd>
-                            )}
                         </div>
 
-                        {/* Description or Context */}
-                        {(todo.description || todo.context) && (
-                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
-                                {todo.description || todo.context}
-                            </p>
-                        )}
-
-                        {/* Worktree info */}
                         {worktree && (
-                            <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400">
-                                <span className="flex items-center gap-1">
+                            <div className="flex items-center gap-2 mt-1 text-[11px] text-fg-muted">
+                                <span className="flex items-center gap-0.5">
                                     <FolderIcon className="w-3 h-3" />
                                     {worktree.name}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <GitBranchIcon className="w-3 h-3" />
-                                    {worktree.branch || 'main'}
                                 </span>
                             </div>
                         )}
                     </div>
 
-                    {/* Actions button */}
-                    <div className={`shrink-0 ${openMenuId === todo.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {/* Actions */}
+                    <div className={`shrink-0 ${openMenuId === todo.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -608,16 +372,13 @@ export default function Dashboard({
                                     setMenuPosition(null);
                                 } else {
                                     const rect = e.currentTarget.getBoundingClientRect();
-                                    setMenuPosition({
-                                        top: rect.bottom + 4,
-                                        left: rect.right - 160,
-                                    });
+                                    setMenuPosition({ top: rect.bottom + 4, left: rect.right - 180 });
                                     setOpenMenuId(todo.id);
                                 }
                             }}
-                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            className="p-0.5 rounded hover:bg-bg-accent text-fg-muted hover:text-fg-secondary"
                         >
-                            <MoreVerticalIcon className="w-4 h-4" />
+                            <MoreVerticalIcon className="w-3.5 h-3.5" />
                         </button>
                     </div>
                 </div>
@@ -625,47 +386,112 @@ export default function Dashboard({
         );
     };
 
-    // VS Code style Sidebar
-    const Sidebar = () => (
-        <div className="h-full flex flex-col bg-gray-100 dark:bg-gray-800">
-            {/* Section Header */}
-            <div className="h-10 flex items-center justify-between px-4 text-[11px] font-semibold uppercase tracking-wider text-gray-500 shrink-0 border-b border-gray-200 dark:border-gray-700">
-                <span>Tasks</span>
+    // Left Sidebar with grouped tasks
+    const TaskPanel = () => (
+        <div className="h-full flex flex-col bg-bg-secondary">
+            {/* Header */}
+            <div className="h-12 flex items-center justify-between px-4 border-b border-border shrink-0">
+                <span className="text-sm font-semibold text-fg">Tasks</span>
                 <div className="flex items-center gap-1">
-                    <span className="px-1.5 py-0.5 text-[10px] bg-gray-200 dark:bg-gray-700 text-gray-500 rounded">{displayedTodos.length}</span>
                     <button
                         onClick={handleNewTask}
-                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        className="p-1.5 rounded-md hover:bg-bg-muted text-fg-muted hover:text-fg transition-colors"
                         title="New Task (N)"
                     >
-                        <PlusIcon className="w-3.5 h-3.5" />
+                        <PlusIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setShowSettingsDialog(true)}
+                        className="p-1.5 rounded-md hover:bg-bg-muted text-fg-muted hover:text-fg transition-colors"
+                        title="Settings"
+                    >
+                        <SettingsIcon className="w-4 h-4" />
                     </button>
                 </div>
             </div>
 
-            {/* Tasks list */}
-            <div className="flex-1 overflow-y-auto">
+            {/* Search */}
+            <div className="px-3 py-2 border-b border-border">
+                <div className="relative">
+                    <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-fg-muted" />
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search..."
+                        className="w-full pl-8 pr-3 py-1.5 bg-bg-muted border-0 rounded-md text-xs text-fg placeholder-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg"
+                        >
+                            <XIcon className="w-3 h-3" />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Task groups */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin">
                 {displayedTodos.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                        <FolderIcon className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-3" />
-                        <p className="text-sm text-gray-500">No tasks yet</p>
-                        <p className="text-xs text-gray-400 mt-1">Press N to create a task</p>
+                    <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                        <div className="w-10 h-10 rounded-full bg-bg-muted flex items-center justify-center mb-3">
+                            <SparklesIcon className="w-5 h-5 text-fg-muted" />
+                        </div>
+                        <p className="text-sm text-fg-secondary">No tasks yet</p>
+                        <p className="text-xs text-fg-muted mt-1">Press <kbd className="px-1 py-0.5 bg-bg-muted rounded text-[10px]">N</kbd> to create one</p>
                     </div>
                 ) : (
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={handleDragEnd}
-                    >
-                        <SortableContext
-                            items={displayedTodos.map(t => t.id)}
-                            strategy={verticalListSortingStrategy}
-                        >
-                            <div className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-                                {displayedTodos.map((todo, index) => (
-                                    <SortableTaskCard key={todo.id} todo={todo} index={index} />
-                                ))}
-                            </div>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={displayedTodos.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                            {STATUS_GROUPS.map(group => {
+                                const items = groupedTodos[group.key];
+                                if (!items || items.length === 0) return null;
+
+                                return (
+                                    <div key={group.key} className="py-1">
+                                        {/* Group header */}
+                                        <div className="flex items-center gap-2 px-4 py-1.5">
+                                            <span className={`w-2 h-2 rounded-full ${group.dotClass}`} />
+                                            <span className="text-[11px] font-medium text-fg-muted uppercase tracking-wider">
+                                                {group.label}
+                                            </span>
+                                            <span className="text-[10px] text-fg-muted bg-bg-muted px-1.5 py-0.5 rounded-full">
+                                                {items.length}
+                                            </span>
+                                        </div>
+
+                                        {/* Tasks in group */}
+                                        <div className="space-y-0.5 pb-1">
+                                            {items.map((todo, index) => (
+                                                <SortableTaskCard key={todo.id} todo={todo} index={index} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* "Other" group for failed/cancelled */}
+                            {groupedTodos['other'] && groupedTodos['other'].length > 0 && (
+                                <div className="py-1">
+                                    <div className="flex items-center gap-2 px-4 py-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-error" />
+                                        <span className="text-[11px] font-medium text-fg-muted uppercase tracking-wider">
+                                            Other
+                                        </span>
+                                        <span className="text-[10px] text-fg-muted bg-bg-muted px-1.5 py-0.5 rounded-full">
+                                            {groupedTodos['other'].length}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-0.5 pb-1">
+                                        {groupedTodos['other'].map((todo, index) => (
+                                            <SortableTaskCard key={todo.id} todo={todo} index={index} />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </SortableContext>
                     </DndContext>
                 )}
@@ -673,12 +499,12 @@ export default function Dashboard({
 
             {/* Archived toggle */}
             {archivedTodos.length > 0 && (
-                <div className="border-t border-gray-200 dark:border-gray-700 shrink-0">
+                <div className="border-t border-border shrink-0">
                     <button
                         onClick={() => setShowArchived(!showArchived)}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        className="w-full flex items-center gap-2 px-4 py-2 text-xs text-fg-muted hover:text-fg-secondary hover:bg-bg-muted transition-colors"
                     >
-                        <ArchiveIcon className="w-4 h-4" />
+                        <ArchiveIcon className="w-3.5 h-3.5" />
                         {showArchived ? 'Hide' : 'Show'} archived ({archivedTodos.length})
                     </button>
                 </div>
@@ -686,58 +512,102 @@ export default function Dashboard({
         </div>
     );
 
-    // Center panel - either welcome or chat
-    const CenterPanel = () => {
+    // Chat panel
+    const ChatPanel = () => {
         if (currentTodo) {
-            // Merge worktree into todo for ChatConversation (without messages - passed separately)
             const todoWithWorktree: Todo = {
                 ...currentTodo,
                 worktree: currentWorktree || undefined,
             };
             return (
-                <ChatConversation
-                    todo={todoWithWorktree}
-                    messages={cachedMessages}
-                    onNewMessage={addMessage}
-                />
+                <div className="h-full flex flex-col">
+                    {/* Task header */}
+                    <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-bg shrink-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <h2 className="text-sm font-medium text-fg truncate">{currentTodo.title}</h2>
+                            {currentTodo.status && (
+                                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                                    currentTodo.status === 'running' ? 'bg-fg text-accent-fg border-fg' :
+                                    currentTodo.status === 'completed' ? 'bg-success/10 text-success border-success/20' :
+                                    currentTodo.status === 'qa' ? 'bg-warning/10 text-warning border-warning/20' :
+                                    'bg-bg-muted text-fg-muted border-border'
+                                }`}>
+                                    {currentTodo.status === 'running' ? 'Running' :
+                                     currentTodo.status === 'completed' ? 'Done' :
+                                     currentTodo.status === 'qa' ? 'QA' :
+                                     currentTodo.status}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                            {currentWorktree && (
+                                <>
+                                    <button
+                                        onClick={() => setRightPanel(prev => prev === 'changes' ? null : 'changes')}
+                                        className={`p-1.5 rounded-md transition-colors ${
+                                            rightPanel === 'changes' ? 'bg-fg text-accent-fg' : 'text-fg-muted hover:bg-bg-muted hover:text-fg'
+                                        }`}
+                                        title="Changes"
+                                    >
+                                        <GitDiffIcon className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => setRightPanel(prev => prev === 'terminal' ? null : 'terminal')}
+                                        className={`p-1.5 rounded-md transition-colors ${
+                                            rightPanel === 'terminal' ? 'bg-fg text-accent-fg' : 'text-fg-muted hover:bg-bg-muted hover:text-fg'
+                                        }`}
+                                        title="Terminal"
+                                    >
+                                        <TerminalIcon className="w-4 h-4" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Chat */}
+                    <div className="flex-1 min-h-0">
+                        <ChatConversation
+                            todo={todoWithWorktree}
+                            messages={cachedMessages}
+                            onNewMessage={addMessage}
+                        />
+                    </div>
+                </div>
             );
         }
 
-        // VS Code style welcome screen
+        // Welcome screen
         return (
-            <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-gray-900 p-8">
-                <div className="max-w-md text-center">
-                    <div className="w-16 h-16 rounded-xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mx-auto mb-6">
-                        <SparklesIcon className="w-8 h-8 text-orange-500" />
+            <div className="h-full flex flex-col items-center justify-center bg-bg p-8">
+                <div className="max-w-sm text-center">
+                    <div className="w-12 h-12 rounded-full bg-bg-muted border border-border flex items-center justify-center mx-auto mb-5">
+                        <SparklesIcon className="w-6 h-6 text-fg-muted" />
                     </div>
-                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Claude Worktree</h1>
-                    <p className="text-gray-500 mb-8">
-                        AI-powered development workflow
-                    </p>
+                    <h1 className="text-lg font-semibold text-fg mb-1">Claude Worktree</h1>
+                    <p className="text-sm text-fg-muted mb-8">AI-powered development workflow</p>
 
-                    {/* Quick actions */}
-                    <div className="space-y-2 text-left max-w-xs mx-auto">
+                    <div className="space-y-2 text-left">
                         <button
                             onClick={handleNewTask}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors group"
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-bg-muted transition-colors group"
                         >
-                            <PlusIcon className="w-5 h-5 text-orange-500" />
-                            <span className="flex-1 text-sm text-gray-900 dark:text-gray-100">New Task</span>
-                            <kbd className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-500 group-hover:bg-white dark:group-hover:bg-gray-600">N</kbd>
+                            <PlusIcon className="w-4 h-4 text-fg-secondary" />
+                            <span className="flex-1 text-sm text-fg">New Task</span>
+                            <kbd className="text-[10px] px-1.5 py-0.5 bg-bg-muted rounded text-fg-muted border border-border">N</kbd>
                         </button>
                         <button
                             onClick={() => setShowSettingsDialog(true)}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors group"
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:bg-bg-muted transition-colors group"
                         >
-                            <SettingsIcon className="w-5 h-5 text-gray-500" />
-                            <span className="flex-1 text-sm text-gray-900 dark:text-gray-100">Settings</span>
-                            <kbd className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-500 group-hover:bg-white dark:group-hover:bg-gray-600">,</kbd>
+                            <SettingsIcon className="w-4 h-4 text-fg-secondary" />
+                            <span className="flex-1 text-sm text-fg">Settings</span>
+                            <kbd className="text-[10px] px-1.5 py-0.5 bg-bg-muted rounded text-fg-muted border border-border">,</kbd>
                         </button>
                     </div>
 
-                    {/* Keyboard shortcuts hint */}
-                    <p className="text-xs text-gray-400 mt-8">
-                        Press <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">?</kbd> for keyboard shortcuts
+                    <p className="text-xs text-fg-muted mt-8">
+                        Press <kbd className="px-1 py-0.5 bg-bg-muted rounded text-[10px] border border-border">?</kbd> for keyboard shortcuts
                     </p>
                 </div>
             </div>
@@ -748,33 +618,28 @@ export default function Dashboard({
         <>
             <Head title="Dashboard" />
 
-            {/* VS Code style layout */}
-            <div className="h-screen w-full flex flex-col bg-white dark:bg-gray-900 overflow-hidden">
-                {/* Title Bar */}
-                <TitleBar />
-
-                {/* Main area with sidebar and content */}
+            <div className="h-screen w-full flex flex-col bg-bg overflow-hidden">
+                {/* Main content */}
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Main content with resizable panels */}
                     <PanelGroup direction="horizontal" className="flex-1">
-                        {/* Sidebar */}
-                        <Panel defaultSize={20} minSize={15} maxSize={30}>
-                            <Sidebar />
+                        {/* Left: Task list */}
+                        <Panel defaultSize={22} minSize={16} maxSize={32}>
+                            <TaskPanel />
                         </Panel>
 
-                        <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-orange-500 hover:w-0.5 transition-all cursor-col-resize" />
+                        <PanelResizeHandle className="w-px bg-border hover:bg-fg-muted hover:w-0.5 transition-all cursor-col-resize" />
 
-                        {/* Editor/Chat area */}
+                        {/* Center: Chat */}
                         <Panel minSize={40}>
-                            <div className="h-full bg-white dark:bg-gray-900">
-                                <CenterPanel />
+                            <div className="h-full bg-bg">
+                                <ChatPanel />
                             </div>
                         </Panel>
 
-                        {/* Right panel - Changes or Terminal */}
+                        {/* Right: Changes or Terminal */}
                         {currentTodo && currentWorktree && rightPanel && (
                             <>
-                                <PanelResizeHandle className="w-px bg-gray-200 dark:bg-gray-700 hover:bg-orange-500 hover:w-0.5 transition-all cursor-col-resize" />
+                                <PanelResizeHandle className="w-px bg-border hover:bg-fg-muted hover:w-0.5 transition-all cursor-col-resize" />
                                 <Panel defaultSize={22} minSize={15} maxSize={35}>
                                     {rightPanel === 'changes' ? (
                                         <ChangesPanel
@@ -795,11 +660,36 @@ export default function Dashboard({
                     </PanelGroup>
                 </div>
 
-                {/* Status Bar */}
-                <StatusBar />
+                {/* Status bar */}
+                <div className="h-6 bg-bg-secondary border-t border-border flex items-center px-3 text-[11px] text-fg-muted shrink-0">
+                    <div className="flex items-center gap-3">
+                        {currentTodo && currentWorktree && (
+                            <>
+                                <span className="flex items-center gap-1">
+                                    <GitBranchIcon className="w-3 h-3" />
+                                    {currentWorktree.branch || 'main'}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <FolderIcon className="w-3 h-3" />
+                                    {currentWorktree.name}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                    <div className="flex-1" />
+                    <div className="flex items-center gap-3">
+                        <span>{displayedTodos.length} tasks</span>
+                        {runningSessions.length > 0 && (
+                            <span className="flex items-center gap-1">
+                                <span className="w-2.5 h-2.5 border-[1.5px] border-fg-muted border-t-fg rounded-full animate-spin" />
+                                {runningSessions.length} running
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            {/* New Task Dialog */}
+            {/* Dialogs */}
             <NewTaskDialog
                 show={showNewTaskDialog}
                 worktrees={worktrees}
@@ -811,31 +701,27 @@ export default function Dashboard({
                 onTaskCreated={(taskId) => switchToTask(taskId)}
             />
 
-            {/* Settings Dialog */}
             <SettingsDialog
                 show={showSettingsDialog}
                 onClose={() => setShowSettingsDialog(false)}
             />
 
-            {/* Keyboard Shortcuts Help */}
             <KeyboardShortcutsHelp
                 show={showKeyboardHelp}
                 onClose={() => setShowKeyboardHelp(false)}
             />
 
-            {/* Sequence indicator - shows current key sequence */}
+            {/* Sequence indicator */}
             {sequenceBuffer.length > 0 && (
-                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-                    <div className="px-4 py-2 shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                        <span className="text-sm text-gray-900 dark:text-gray-100">
-                            {sequenceBuffer.map((key, i) => (
-                                <span key={i}>
-                                    {i > 0 && <span className="mx-1 opacity-50">→</span>}
-                                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-sm">{key}</kbd>
-                                </span>
-                            ))}
-                            <span className="ml-2 animate-pulse opacity-50">...</span>
-                        </span>
+                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50">
+                    <div className="px-3 py-1.5 bg-fg text-accent-fg rounded-md shadow-lg text-sm font-mono">
+                        {sequenceBuffer.map((key, i) => (
+                            <span key={i}>
+                                {i > 0 && <span className="mx-1 opacity-50">&rarr;</span>}
+                                <span>{key}</span>
+                            </span>
+                        ))}
+                        <span className="ml-1 animate-pulse-subtle">...</span>
                     </div>
                 </div>
             )}
@@ -843,17 +729,12 @@ export default function Dashboard({
             {/* Floating Task Menu */}
             {openMenuId !== null && menuPosition && (
                 <>
-                    {/* Backdrop to close menu */}
                     <div
                         className="fixed inset-0 z-[9998]"
-                        onClick={() => {
-                            setOpenMenuId(null);
-                            setMenuPosition(null);
-                        }}
+                        onClick={() => { setOpenMenuId(null); setMenuPosition(null); }}
                     />
-                    {/* Menu */}
                     <ul
-                        className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 w-40 p-1 z-[9999]"
+                        className="fixed bg-bg rounded-lg shadow-xl border border-border w-44 p-1 z-[9999]"
                         style={{ top: menuPosition.top, left: menuPosition.left }}
                     >
                         <li>
@@ -862,13 +743,11 @@ export default function Dashboard({
                                     e.stopPropagation();
                                     const todo = todos.find(t => t.id === openMenuId);
                                     if (todo) setEditingTodo(todo);
-                                    setOpenMenuId(null);
-                                    setMenuPosition(null);
+                                    setOpenMenuId(null); setMenuPosition(null);
                                 }}
-                                className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                                className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-md hover:bg-bg-muted text-fg-secondary"
                             >
-                                <EditIcon className="w-4 h-4" />
-                                Edit
+                                <EditIcon className="w-3.5 h-3.5" /> Edit
                             </button>
                         </li>
                         <li>
@@ -876,27 +755,47 @@ export default function Dashboard({
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (openMenuId) handleDuplicateTask(openMenuId);
-                                    setOpenMenuId(null);
-                                    setMenuPosition(null);
                                 }}
-                                className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                                className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-md hover:bg-bg-muted text-fg-secondary"
                             >
-                                <CopyIcon className="w-4 h-4" />
-                                Duplicate
+                                <CopyIcon className="w-3.5 h-3.5" /> Duplicate
                             </button>
                         </li>
+
+                        {/* Status change options */}
+                        <li className="border-t border-border my-1" />
+                        <li className="px-3 py-1">
+                            <span className="text-[10px] font-medium text-fg-muted uppercase tracking-wider">Move to</span>
+                        </li>
+                        {(() => {
+                            const todo = todos.find(t => t.id === openMenuId);
+                            if (!todo) return null;
+                            return STATUS_GROUPS.filter(g => !g.statuses.includes(todo.status)).map(group => (
+                                <li key={group.key}>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (openMenuId) handleStatusChange(openMenuId, group.statuses[0]);
+                                        }}
+                                        className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-md hover:bg-bg-muted text-fg-secondary"
+                                    >
+                                        <span className={`w-2 h-2 rounded-full ${group.dotClass}`} />
+                                        {group.label}
+                                    </button>
+                                </li>
+                            ));
+                        })()}
+
+                        <li className="border-t border-border my-1" />
                         <li>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (openMenuId) handleArchiveTask(openMenuId);
-                                    setOpenMenuId(null);
-                                    setMenuPosition(null);
                                 }}
-                                className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-amber-600 dark:text-amber-400"
+                                className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-md hover:bg-bg-muted text-error"
                             >
-                                <ArchiveIcon className="w-4 h-4" />
-                                Archive
+                                <ArchiveIcon className="w-3.5 h-3.5" /> Archive
                             </button>
                         </li>
                     </ul>
@@ -912,27 +811,8 @@ export default function Dashboard({
     );
 }
 
-// Model colors for the edit dialog
-const editModelColors: Record<string, { bg: string; border: string; text: string }> = {
-    opus: { bg: 'bg-purple-500/10', border: 'border-purple-500', text: 'text-purple-500' },
-    sonnet: { bg: 'bg-brand/10', border: 'border-brand', text: 'text-brand' },
-    haiku: { bg: 'bg-emerald-500/10', border: 'border-emerald-500', text: 'text-emerald-500' },
-};
-
-const editModelInfo: Record<string, { name: string; description: string }> = {
-    sonnet: { name: 'Sonnet', description: 'Fast and efficient' },
-    opus: { name: 'Opus', description: 'Most capable' },
-    haiku: { name: 'Haiku', description: 'Fastest' },
-};
-
-// Edit Task Dialog Component
-function EditTaskDialog({
-    todo,
-    onClose,
-}: {
-    todo: Todo | null;
-    onClose: () => void;
-}) {
+// Edit Task Dialog
+function EditTaskDialog({ todo, onClose }: { todo: Todo | null; onClose: () => void }) {
     const [title, setTitle] = useState('');
     const [context, setContext] = useState('');
     const [model, setModel] = useState<'sonnet' | 'opus' | 'haiku'>('sonnet');
@@ -956,10 +836,8 @@ function EditTaskDialog({
         }
     }, [todo]);
 
-    // Cmd/Ctrl+Enter to submit
     useEffect(() => {
         if (!todo) return;
-
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -969,7 +847,6 @@ function EditTaskDialog({
                 }
             }
         };
-
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [todo, title, isSubmitting]);
@@ -977,9 +854,7 @@ function EditTaskDialog({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!todo) return;
-
         setIsSubmitting(true);
-
         router.patch(
             route('todos.update', todo.id),
             {
@@ -1004,67 +879,63 @@ function EditTaskDialog({
         { name: 'Hooks', key: 1 },
     ];
 
+    const modelInfo: Record<string, { name: string; desc: string }> = {
+        sonnet: { name: 'Sonnet', desc: 'Fast & efficient' },
+        opus: { name: 'Opus', desc: 'Most capable' },
+        haiku: { name: 'Haiku', desc: 'Fastest' },
+    };
+
     return (
         <Transition show={show} as={Fragment}>
             <Dialog as="div" className="relative z-50" onClose={onClose}>
                 <TransitionChild
                     as={Fragment}
-                    enter="ease-out duration-400"
+                    enter="ease-out duration-200"
                     enterFrom="opacity-0"
                     enterTo="opacity-100"
-                    leave="ease-in duration-300"
+                    leave="ease-in duration-150"
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-md" />
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
                 </TransitionChild>
 
                 <div className="fixed inset-0 overflow-y-auto">
-                    <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+                    <div className="flex min-h-full items-center justify-center p-4">
                         <TransitionChild
                             as={Fragment}
-                            enter="ease-out duration-400"
-                            enterFrom="opacity-0 scale-95 translate-y-4"
-                            enterTo="opacity-100 scale-100 translate-y-0"
-                            leave="ease-in duration-300"
-                            leaveFrom="opacity-100 scale-100 translate-y-0"
-                            leaveTo="opacity-0 scale-95 translate-y-4"
+                            enter="ease-out duration-200"
+                            enterFrom="opacity-0 scale-95"
+                            enterTo="opacity-100 scale-100"
+                            leave="ease-in duration-150"
+                            leaveFrom="opacity-100 scale-100"
+                            leaveTo="opacity-0 scale-95"
                         >
-                            <DialogPanel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-bg-primary border border-border shadow-2xl transition-all">
+                            <DialogPanel className="w-full max-w-lg transform rounded-lg bg-bg border border-border shadow-2xl transition-all">
                                 {/* Header */}
-                                <div className="relative px-8 pt-8 pb-6">
-                                    <div className="absolute top-4 right-4">
-                                        <button
-                                            type="button"
-                                            onClick={onClose}
-                                            className="p-2 text-text-low hover:text-text-high hover:bg-bg-panel rounded-xl transition-all duration-200"
-                                        >
-                                            <XIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-brand/20 to-brand/5 border border-brand/20">
-                                            <EditIcon className="w-7 h-7 text-brand" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-text-high">Edit Task</h2>
-                                            <p className="text-sm text-text-low mt-0.5">Modify task settings and hooks</p>
-                                        </div>
-                                    </div>
+                                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                                    <h2 className="text-base font-semibold text-fg">Edit Task</h2>
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="p-1 text-fg-muted hover:text-fg hover:bg-bg-muted rounded-md transition-colors"
+                                    >
+                                        <XIcon className="w-4 h-4" />
+                                    </button>
                                 </div>
 
-                                <form id="edit-task-form" onSubmit={handleSubmit} className="px-8 pb-8">
+                                <form id="edit-task-form" onSubmit={handleSubmit} className="p-6">
                                     {/* Tabs */}
-                                    <div className="flex gap-1 p-1 bg-bg-secondary rounded-xl mb-6">
+                                    <div className="flex gap-1 p-0.5 bg-bg-muted rounded-md mb-5">
                                         {tabs.map((tab) => (
                                             <button
                                                 key={tab.key}
                                                 type="button"
                                                 onClick={() => setActiveTab(tab.key)}
-                                                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                                className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                                                     activeTab === tab.key
-                                                        ? 'bg-bg-primary text-text-high shadow-sm'
-                                                        : 'text-text-low hover:text-text-normal'
+                                                        ? 'bg-bg text-fg shadow-sm'
+                                                        : 'text-fg-muted hover:text-fg-secondary'
                                                 }`}
                                             >
                                                 {tab.name}
@@ -1074,69 +945,49 @@ function EditTaskDialog({
 
                                     {/* Task Tab */}
                                     {activeTab === 0 && (
-                                        <div className="space-y-6">
-                                            {/* Title */}
-                                            <div className="space-y-2">
-                                                <label htmlFor="edit-title" className="text-sm font-semibold text-text-high">
-                                                    Title <span className="text-error">*</span>
-                                                </label>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs font-medium text-fg-secondary mb-1.5 block">Title</label>
                                                 <input
-                                                    id="edit-title"
                                                     type="text"
                                                     value={title}
                                                     onChange={(e) => setTitle(e.target.value)}
                                                     placeholder="Task title"
-                                                    className="w-full px-4 py-3 bg-bg-secondary border-2 border-transparent rounded-xl focus:outline-none focus:border-brand focus:bg-bg-primary transition-all duration-200 text-text-high placeholder:text-text-low/60"
+                                                    className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-md text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
                                                     required
                                                 />
                                             </div>
 
-                                            {/* Context */}
-                                            <div className="space-y-2">
-                                                <label htmlFor="edit-context" className="text-sm font-semibold text-text-high">
-                                                    Context
-                                                </label>
+                                            <div>
+                                                <label className="text-xs font-medium text-fg-secondary mb-1.5 block">Context</label>
                                                 <textarea
-                                                    id="edit-context"
                                                     value={context}
                                                     onChange={(e) => setContext(e.target.value)}
                                                     placeholder="Context for Claude..."
-                                                    className="w-full px-4 py-3 bg-bg-secondary border-2 border-transparent rounded-xl focus:outline-none focus:border-brand focus:bg-bg-primary transition-all duration-200 text-text-high placeholder:text-text-low/60 min-h-[120px] resize-y leading-relaxed"
+                                                    className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-md text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring min-h-[100px] resize-y"
                                                 />
                                             </div>
 
-                                            {/* Model */}
-                                            <div className="space-y-3">
-                                                <label className="text-sm font-semibold text-text-high">
-                                                    Model
-                                                </label>
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    {(['sonnet', 'opus', 'haiku'] as const).map((modelKey) => {
-                                                        const isSelected = model === modelKey;
-                                                        const colors = editModelColors[modelKey];
-                                                        return (
-                                                            <button
-                                                                key={modelKey}
-                                                                type="button"
-                                                                onClick={() => setModel(modelKey)}
-                                                                className={`relative p-4 text-left transition-all duration-200 rounded-xl border-2 ${
-                                                                    isSelected
-                                                                        ? `${colors.bg} ${colors.border} shadow-lg`
-                                                                        : 'bg-bg-secondary border-transparent hover:border-border hover:bg-bg-panel'
-                                                                }`}
-                                                            >
-                                                                {isSelected && (
-                                                                    <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${colors.text.replace('text-', 'bg-')}`} />
-                                                                )}
-                                                                <div className={`font-semibold text-sm ${isSelected ? 'text-text-high' : 'text-text-normal'}`}>
-                                                                    {editModelInfo[modelKey].name}
-                                                                </div>
-                                                                <div className="text-xs text-text-low mt-1">
-                                                                    {editModelInfo[modelKey].description}
-                                                                </div>
-                                                            </button>
-                                                        );
-                                                    })}
+                                            <div>
+                                                <label className="text-xs font-medium text-fg-secondary mb-1.5 block">Model</label>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {(['sonnet', 'opus', 'haiku'] as const).map((m) => (
+                                                        <button
+                                                            key={m}
+                                                            type="button"
+                                                            onClick={() => setModel(m)}
+                                                            className={`p-3 text-left rounded-md border transition-colors ${
+                                                                model === m
+                                                                    ? 'border-fg bg-bg-muted'
+                                                                    : 'border-border hover:border-border-strong hover:bg-bg-secondary'
+                                                            }`}
+                                                        >
+                                                            <div className={`text-xs font-medium ${model === m ? 'text-fg' : 'text-fg-secondary'}`}>
+                                                                {modelInfo[m].name}
+                                                            </div>
+                                                            <div className="text-[10px] text-fg-muted mt-0.5">{modelInfo[m].desc}</div>
+                                                        </button>
+                                                    ))}
                                                 </div>
                                             </div>
                                         </div>
@@ -1144,117 +995,61 @@ function EditTaskDialog({
 
                                     {/* Hooks Tab */}
                                     {activeTab === 1 && (
-                                        <div className="space-y-6">
-                                            {/* Pre-Command */}
-                                            <div className="space-y-2">
-                                                <label htmlFor="edit-pre-command" className="text-sm font-semibold text-text-high">
-                                                    Pre-Command
-                                                </label>
-                                                <input
-                                                    id="edit-pre-command"
-                                                    type="text"
-                                                    value={preCommand}
-                                                    onChange={(e) => setPreCommand(e.target.value)}
-                                                    placeholder="e.g., npm install, git pull"
-                                                    className="w-full px-4 py-3 bg-bg-secondary border-2 border-transparent rounded-xl focus:outline-none focus:border-brand focus:bg-bg-primary transition-all duration-200 text-text-high placeholder:text-text-low/60 font-mono text-sm"
-                                                />
-                                                <p className="text-xs text-text-low">
-                                                    Command to run before starting Claude
-                                                </p>
-                                            </div>
+                                        <div className="space-y-4">
+                                            {[
+                                                { label: 'Pre-Command', value: preCommand, set: setPreCommand, placeholder: 'e.g., npm install' },
+                                                { label: 'Post-Command', value: postCommand, set: setPostCommand, placeholder: 'e.g., npm test' },
+                                            ].map(({ label, value, set, placeholder }) => (
+                                                <div key={label}>
+                                                    <label className="text-xs font-medium text-fg-secondary mb-1.5 block">{label}</label>
+                                                    <input
+                                                        type="text"
+                                                        value={value}
+                                                        onChange={(e) => set(e.target.value)}
+                                                        placeholder={placeholder}
+                                                        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-md text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring font-mono"
+                                                    />
+                                                </div>
+                                            ))}
 
-                                            {/* Post-Command */}
-                                            <div className="space-y-2">
-                                                <label htmlFor="edit-post-command" className="text-sm font-semibold text-text-high">
-                                                    Post-Command
-                                                </label>
-                                                <input
-                                                    id="edit-post-command"
-                                                    type="text"
-                                                    value={postCommand}
-                                                    onChange={(e) => setPostCommand(e.target.value)}
-                                                    placeholder="e.g., npm test, npm run build"
-                                                    className="w-full px-4 py-3 bg-bg-secondary border-2 border-transparent rounded-xl focus:outline-none focus:border-brand focus:bg-bg-primary transition-all duration-200 text-text-high placeholder:text-text-low/60 font-mono text-sm"
-                                                />
-                                                <p className="text-xs text-text-low">
-                                                    Command to run after Claude finishes
-                                                </p>
-                                            </div>
-
-                                            {/* Message Prefix */}
-                                            <div className="space-y-2">
-                                                <label htmlFor="edit-message-prefix" className="text-sm font-semibold text-text-high">
-                                                    Message Prefix
-                                                </label>
-                                                <textarea
-                                                    id="edit-message-prefix"
-                                                    value={messagePrefix}
-                                                    onChange={(e) => setMessagePrefix(e.target.value)}
-                                                    placeholder="Text to prepend to every message..."
-                                                    className="w-full px-4 py-3 bg-bg-secondary border-2 border-transparent rounded-xl focus:outline-none focus:border-brand focus:bg-bg-primary transition-all duration-200 text-text-high placeholder:text-text-low/60 min-h-[80px] resize-y text-sm"
-                                                />
-                                            </div>
-
-                                            {/* Message Suffix */}
-                                            <div className="space-y-2">
-                                                <label htmlFor="edit-message-suffix" className="text-sm font-semibold text-text-high">
-                                                    Message Suffix
-                                                </label>
-                                                <textarea
-                                                    id="edit-message-suffix"
-                                                    value={messageSuffix}
-                                                    onChange={(e) => setMessageSuffix(e.target.value)}
-                                                    placeholder="Text to append to every message..."
-                                                    className="w-full px-4 py-3 bg-bg-secondary border-2 border-transparent rounded-xl focus:outline-none focus:border-brand focus:bg-bg-primary transition-all duration-200 text-text-high placeholder:text-text-low/60 min-h-[80px] resize-y text-sm"
-                                                />
-                                            </div>
+                                            {[
+                                                { label: 'Message Prefix', value: messagePrefix, set: setMessagePrefix },
+                                                { label: 'Message Suffix', value: messageSuffix, set: setMessageSuffix },
+                                            ].map(({ label, value, set }) => (
+                                                <div key={label}>
+                                                    <label className="text-xs font-medium text-fg-secondary mb-1.5 block">{label}</label>
+                                                    <textarea
+                                                        value={value}
+                                                        onChange={(e) => set(e.target.value)}
+                                                        placeholder={`Text to ${label.toLowerCase().includes('prefix') ? 'prepend' : 'append'}...`}
+                                                        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-md text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring min-h-[72px] resize-y"
+                                                    />
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
 
-                                    {/* Divider */}
-                                    <div className="border-t border-border mt-6 pt-6" />
-
                                     {/* Actions */}
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-xs text-text-low">
-                                            <kbd className="px-1.5 py-0.5 bg-bg-panel rounded text-text-low font-mono">
-                                                {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}
-                                            </kbd>
-                                            <span className="mx-1">+</span>
-                                            <kbd className="px-1.5 py-0.5 bg-bg-panel rounded text-text-low font-mono">Enter</kbd>
-                                            <span className="ml-2">to save</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <button
-                                                type="button"
-                                                onClick={onClose}
-                                                className="px-6 py-2.5 text-sm font-medium text-text-normal hover:text-text-high hover:bg-bg-panel rounded-xl transition-all duration-200"
-                                                disabled={isSubmitting}
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                className={`flex items-center gap-2 px-8 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 ${
-                                                    !isSubmitting && title.trim()
-                                                        ? 'bg-brand hover:bg-brand-hover text-on-brand shadow-lg shadow-brand/25 hover:shadow-xl hover:shadow-brand/30'
-                                                        : 'bg-bg-panel text-text-low cursor-not-allowed'
-                                                }`}
-                                                disabled={isSubmitting || !title.trim()}
-                                            >
-                                                {isSubmitting ? (
-                                                    <>
-                                                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                                        </svg>
-                                                        Saving...
-                                                    </>
-                                                ) : (
-                                                    'Save Changes'
-                                                )}
-                                            </button>
-                                        </div>
+                                    <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-border">
+                                        <button
+                                            type="button"
+                                            onClick={onClose}
+                                            className="px-4 py-2 text-xs font-medium text-fg-secondary hover:text-fg hover:bg-bg-muted rounded-md transition-colors"
+                                            disabled={isSubmitting}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className={`px-4 py-2 text-xs font-medium rounded-md transition-colors ${
+                                                !isSubmitting && title.trim()
+                                                    ? 'bg-fg text-accent-fg hover:opacity-90'
+                                                    : 'bg-bg-muted text-fg-muted cursor-not-allowed'
+                                            }`}
+                                            disabled={isSubmitting || !title.trim()}
+                                        >
+                                            {isSubmitting ? 'Saving...' : 'Save Changes'}
+                                        </button>
                                     </div>
                                 </form>
                             </DialogPanel>

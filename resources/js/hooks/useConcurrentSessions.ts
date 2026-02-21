@@ -9,6 +9,44 @@ function isWebSocketAvailable(): boolean {
     return window.Echo.connector.pusher.connection.state === 'connected';
 }
 
+// Send browser notification when a task completes (if tab is not focused)
+function sendBrowserNotification(todoId: number) {
+    if (document.hasFocus()) return;
+    if (Notification.permission !== 'granted') return;
+
+    try {
+        const notification = new Notification('Task completed', {
+            body: `Task #${todoId} has finished.`,
+            icon: '/favicon.ico',
+            tag: `task-complete-${todoId}`,
+        });
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+        };
+    } catch {
+        // Notification API not available
+    }
+
+    // Update document title with [Done] badge
+    if (!document.title.startsWith('[Done]')) {
+        const originalTitle = document.title;
+        document.title = `[Done] ${originalTitle}`;
+        const restoreTitle = () => {
+            document.title = originalTitle;
+            window.removeEventListener('focus', restoreTitle);
+        };
+        window.addEventListener('focus', restoreTitle);
+    }
+}
+
+// Request notification permission (call on first user interaction)
+export function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
 // Play notification sound when any session completes
 function playNotificationSound() {
     try {
@@ -490,6 +528,7 @@ class ConcurrentSessionManager {
                     completionCount: session.completionCount + 1,
                 });
                 playNotificationSound();
+                sendBrowserNotification(todoId);
                 // Process queued messages for WebSocket mode
                 this.processQueuedMessages(todoId);
                 break;

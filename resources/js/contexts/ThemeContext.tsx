@@ -58,9 +58,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const root = document.documentElement;
 
-        // Update data-theme for DaisyUI
-        root.setAttribute('data-theme', resolvedTheme);
-
         // Update class for Tailwind dark mode
         if (resolvedTheme === 'dark') {
             root.classList.add('dark');
@@ -72,6 +69,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const setTheme = (newTheme: Theme) => {
         setThemeState(newTheme);
         localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+
+        // Apply to DOM immediately for instant visual feedback
+        const resolved = newTheme === 'system' ? getSystemTheme() : newTheme;
+        setResolvedTheme(resolved);
+        if (resolved === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
     };
 
     return (
