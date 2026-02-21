@@ -25,6 +25,8 @@ class TodoController extends Controller
             'post_command' => 'nullable|string',
             'message_prefix' => 'nullable|string|max:500',
             'message_suffix' => 'nullable|string|max:500',
+            'is_autonomous' => 'boolean',
+            'autonomous_max_iterations' => 'integer|min:1|max:100',
         ]);
 
         // Apply user settings defaults if not provided
@@ -32,6 +34,12 @@ class TodoController extends Controller
         $validated['model'] = $validated['model'] ?? $settings->default_model ?? config('claude.default_model', 'sonnet');
         $validated['context'] = $validated['context'] ?? $settings->default_context;
         $validated['status'] = 'pending';
+
+        // Set autonomous defaults
+        if (!empty($validated['is_autonomous'])) {
+            $validated['autonomous_phase'] = 'working';
+            $validated['autonomous_current_iteration'] = 0;
+        }
 
         $todo = $worktree->todos()->create($validated);
 
@@ -92,6 +100,8 @@ class TodoController extends Controller
             'post_command' => 'nullable|string',
             'message_prefix' => 'nullable|string|max:500',
             'message_suffix' => 'nullable|string|max:500',
+            'is_autonomous' => 'boolean',
+            'autonomous_max_iterations' => 'integer|min:1|max:100',
         ]);
 
         $todo->update($validated);

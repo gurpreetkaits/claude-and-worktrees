@@ -12,6 +12,7 @@ export interface Worktree {
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku';
 export type TodoStatus = 'pending' | 'running' | 'completed' | 'failed' | 'qa' | 'cancelled';
+export type AutonomousPhase = 'working' | 'qa' | 'completed' | 'failed';
 
 export interface Todo {
     id: number;
@@ -27,6 +28,10 @@ export interface Todo {
     message_suffix: string | null;
     status: TodoStatus;
     is_archived: boolean;
+    is_autonomous: boolean;
+    autonomous_max_iterations: number;
+    autonomous_current_iteration: number;
+    autonomous_phase: AutonomousPhase | null;
     messages?: Message[];
     changes?: TodoChange[];
     created_at: string;

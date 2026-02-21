@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
-import { Message } from '@/types';
+import { Message, AutonomousPhase } from '@/types';
 
 // Check if WebSocket (Echo) is available and connected
 function isWebSocketAvailable(): boolean {
@@ -140,6 +140,9 @@ export interface SessionState {
     preCommand: CommandExecution | null;
     postCommand: CommandExecution | null;
     hooks: HookExecution[];
+    autonomousPhase: AutonomousPhase | null;
+    autonomousIteration: number;
+    autonomousMaxIterations: number;
 }
 
 const initialSessionState: SessionState = {
@@ -163,6 +166,9 @@ const initialSessionState: SessionState = {
     preCommand: null,
     postCommand: null,
     hooks: [],
+    autonomousPhase: null,
+    autonomousIteration: 0,
+    autonomousMaxIterations: 0,
 };
 
 // Listener types
@@ -197,6 +203,10 @@ const CLAUDE_EVENTS = [
     'cancellation_acknowledged',
     'cancelled',
     'shutdown_initiated',
+    'autonomous_phase_change',
+    'autonomous_continue',
+    'autonomous_max_iterations',
+    'autonomous_paused',
 ];
 
 // Global session manager with WebSocket + SSE support
@@ -520,18 +530,23 @@ class ConcurrentSessionManager {
                 });
                 break;
 
-            case 'complete':
+            case 'complete': {
+                const isAutonomousActive = session.autonomousPhase === 'working' || session.autonomousPhase === 'qa';
                 this.updateSession(todoId, {
-                    isStreaming: false,
+                    // During autonomous mode, keep streaming true (next job will dispatch)
+                    isStreaming: isAutonomousActive ? true : false,
                     currentText: (data.message as Message)?.content || session.currentText,
                     lastCompletedMessage: data.message as Message,
                     completionCount: session.completionCount + 1,
                 });
-                playNotificationSound();
-                sendBrowserNotification(todoId);
-                // Process queued messages for WebSocket mode
-                this.processQueuedMessages(todoId);
+                if (!isAutonomousActive) {
+                    playNotificationSound();
+                    sendBrowserNotification(todoId);
+                    // Process queued messages for WebSocket mode
+                    this.processQueuedMessages(todoId);
+                }
                 break;
+            }
 
             case 'error':
                 this.updateSession(todoId, {
@@ -624,6 +639,52 @@ class ConcurrentSessionManager {
 
             case 'shutdown_initiated':
                 console.log(`[SessionManager] Shutdown initiated for todo ${todoId}`);
+                break;
+
+            case 'autonomous_phase_change': {
+                const phase = data.phase as string;
+                this.updateSession(todoId, {
+                    autonomousPhase: phase as AutonomousPhase,
+                    autonomousIteration: (data.iteration as number) || session.autonomousIteration,
+                    // Keep streaming true during autonomous transitions (except terminal states)
+                    ...(phase === 'completed' || phase === 'failed' ? { isStreaming: false } : {}),
+                });
+                if (phase === 'completed') {
+                    playNotificationSound();
+                    sendBrowserNotification(todoId);
+                }
+                console.log(`[SessionManager] Autonomous phase change for todo ${todoId}: ${phase}`);
+                break;
+            }
+
+            case 'autonomous_continue':
+                this.updateSession(todoId, {
+                    autonomousPhase: (data.phase as AutonomousPhase) || session.autonomousPhase,
+                    autonomousIteration: data.iteration as number,
+                    autonomousMaxIterations: (data.max as number) || session.autonomousMaxIterations,
+                    // Keep isStreaming true — a new job is dispatched
+                });
+                console.log(`[SessionManager] Autonomous continue for todo ${todoId}: iteration ${data.iteration}/${data.max}`);
+                break;
+
+            case 'autonomous_max_iterations':
+                this.updateSession(todoId, {
+                    isStreaming: false,
+                    autonomousPhase: 'failed',
+                    autonomousIteration: data.iteration as number,
+                    autonomousMaxIterations: data.max as number,
+                    error: `Max iterations reached (${data.iteration}/${data.max})`,
+                });
+                playNotificationSound();
+                sendBrowserNotification(todoId);
+                console.log(`[SessionManager] Autonomous max iterations for todo ${todoId}`);
+                break;
+
+            case 'autonomous_paused':
+                this.updateSession(todoId, {
+                    autonomousPhase: null,
+                });
+                console.log(`[SessionManager] Autonomous paused for todo ${todoId}: ${data.reason}`);
                 break;
         }
     }

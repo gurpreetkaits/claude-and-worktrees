@@ -23,6 +23,17 @@ class Todo extends Model
         'status',
         'is_archived',
         'position',
+        'is_autonomous',
+        'autonomous_max_iterations',
+        'autonomous_current_iteration',
+        'autonomous_phase',
+    ];
+
+    protected $casts = [
+        'is_autonomous' => 'boolean',
+        'is_archived' => 'boolean',
+        'autonomous_max_iterations' => 'integer',
+        'autonomous_current_iteration' => 'integer',
     ];
 
     public function worktree(): BelongsTo
@@ -98,5 +109,42 @@ class Todo extends Model
     public function isArchived(): bool
     {
         return $this->is_archived;
+    }
+
+    public function isAutonomous(): bool
+    {
+        return $this->is_autonomous;
+    }
+
+    public function incrementAutonomousIteration(): int
+    {
+        $this->increment('autonomous_current_iteration');
+        return $this->fresh()->autonomous_current_iteration;
+    }
+
+    public function hasReachedMaxIterations(): bool
+    {
+        return $this->autonomous_current_iteration >= $this->autonomous_max_iterations;
+    }
+
+    public function setAutonomousPhase(string $phase): void
+    {
+        $this->update(['autonomous_phase' => $phase]);
+    }
+
+    public function markAsAutonomousCompleted(): void
+    {
+        $this->update([
+            'status' => 'completed',
+            'autonomous_phase' => 'completed',
+        ]);
+    }
+
+    public function markAsAutonomousFailed(): void
+    {
+        $this->update([
+            'status' => 'failed',
+            'autonomous_phase' => 'failed',
+        ]);
     }
 }

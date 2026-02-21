@@ -40,6 +40,8 @@ export function NewTaskDialog({
     const [context, setContext] = useState(defaultContext);
     const [model, setModel] = useState<ClaudeModel>(defaultModel);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isAutonomous, setIsAutonomous] = useState(false);
+    const [maxIterations, setMaxIterations] = useState(25);
     const [worktreeList, setWorktreeList] = useState<Worktree[]>(worktrees);
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const modelDropdownRef = useRef<HTMLDivElement>(null);
@@ -47,7 +49,7 @@ export function NewTaskDialog({
     useEffect(() => { setWorktreeList(worktrees); }, [worktrees]);
     useEffect(() => { if (defaultWorktree) setSelectedWorktree(defaultWorktree); }, [defaultWorktree]);
     useEffect(() => {
-        if (show) { setTitle(''); setContext(defaultContext); setModel(defaultModel); }
+        if (show) { setTitle(''); setContext(defaultContext); setModel(defaultModel); setIsAutonomous(false); setMaxIterations(25); }
     }, [show, defaultModel, defaultContext]);
 
     useEffect(() => {
@@ -100,7 +102,13 @@ export function NewTaskDialog({
         try {
             const response = await axios.post<{ id: number }>(
                 route('todos.store', selectedWorktree.id),
-                { title: title.trim(), context: context.trim(), model },
+                {
+                    title: title.trim(),
+                    context: context.trim(),
+                    model,
+                    is_autonomous: isAutonomous,
+                    ...(isAutonomous ? { autonomous_max_iterations: maxIterations } : {}),
+                },
                 { headers: { 'Accept': 'application/json' } }
             );
             onClose();
@@ -199,6 +207,41 @@ export function NewTaskDialog({
                                                 </div>
                                             )}
                                         </div>
+                                    </div>
+
+                                    {/* Autonomous mode toggle */}
+                                    <div className="flex items-center justify-between px-1">
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isAutonomous}
+                                                onClick={() => setIsAutonomous(!isAutonomous)}
+                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                                    isAutonomous ? 'bg-fg' : 'bg-bg-muted border border-border'
+                                                }`}
+                                            >
+                                                <span
+                                                    className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
+                                                        isAutonomous ? 'translate-x-[18px] bg-accent-fg' : 'translate-x-[3px] bg-fg-muted'
+                                                    }`}
+                                                />
+                                            </button>
+                                            <span className="text-xs text-fg-secondary">Autonomous</span>
+                                        </div>
+                                        {isAutonomous && (
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[11px] text-fg-muted">Max iterations</span>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={100}
+                                                    value={maxIterations}
+                                                    onChange={(e) => setMaxIterations(Math.max(1, Math.min(100, parseInt(e.target.value) || 25)))}
+                                                    className="w-14 px-2 py-1 text-xs bg-bg-secondary border border-border rounded text-fg text-center focus:outline-none focus:ring-1 focus:ring-ring"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center justify-between pt-2">

@@ -345,9 +345,19 @@ export default function Dashboard({
                             <span className={`text-[13px] truncate ${isActive ? 'text-fg font-medium' : 'text-fg-secondary'}`}>
                                 {todo.title}
                             </span>
-                            {isRunning && (
+                            {isRunning && todo.is_autonomous && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-warning/20 text-warning rounded">
+                                    Auto {todo.autonomous_current_iteration}/{todo.autonomous_max_iterations}
+                                </span>
+                            )}
+                            {isRunning && !todo.is_autonomous && (
                                 <span className="px-1.5 py-0.5 text-[10px] font-medium bg-fg text-accent-fg rounded">
                                     Running
+                                </span>
+                            )}
+                            {!isRunning && todo.is_autonomous && todo.autonomous_phase && todo.autonomous_phase !== 'completed' && todo.autonomous_phase !== 'failed' && (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-warning/10 text-warning border border-warning/20 rounded">
+                                    Auto
                                 </span>
                             )}
                         </div>

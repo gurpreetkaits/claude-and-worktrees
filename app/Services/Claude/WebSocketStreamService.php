@@ -5,6 +5,7 @@ namespace App\Services\Claude;
 use App\Events\ClaudeStreamEvent;
 use App\Models\ClaudeSession;
 use App\Models\Message;
+use App\Models\QueuedMessage;
 use App\Models\Todo;
 use App\Services\Claude\MessageTypes;
 use App\Services\ClaudeProcessService;
@@ -164,17 +165,23 @@ class WebSocketStreamService
      * @param string $content The user's message content
      * @param array $images Array of images with 'data' (base64) and 'mediaType' keys
      * @param callable $isCancelled Callback that returns true if cancellation was requested
+     * @param bool $isAutonomousMessage Whether this is an auto-generated autonomous message
+     * @return string The final content from the assistant response
      */
-    public function streamWithCancellation(Todo $todo, string $content, array $images = [], callable $isCancelled = null): void
+    public function streamWithCancellation(Todo $todo, string $content, array $images = [], callable $isCancelled = null, bool $isAutonomousMessage = false): string
     {
-        // Apply message prefix/suffix if set
-        $processedContent = $this->applyMessageTransforms($todo, $content);
+        // Apply message prefix/suffix if set (skip for autonomous auto-generated messages)
+        $processedContent = $isAutonomousMessage ? $content : $this->applyMessageTransforms($todo, $content);
 
         // Create user message
-        $userMessage = $todo->messages()->create([
+        $messageData = [
             'role' => 'user',
             'content' => $content,
-        ]);
+        ];
+        if ($isAutonomousMessage) {
+            $messageData['metadata'] = json_encode(['autonomous' => true]);
+        }
+        $userMessage = $todo->messages()->create($messageData);
 
         $this->broadcast($todo->id, 'user_message', [
             'message' => $userMessage->toArray(),
@@ -184,11 +191,11 @@ class WebSocketStreamService
         if ($isCancelled && $isCancelled()) {
             Log::info("[WebSocketStreamService] Cancelled before pre-command for todo {$todo->id}");
             $this->broadcast($todo->id, 'cancelled', ['message' => 'Task was cancelled']);
-            return;
+            return '';
         }
 
-        // Run pre-command if set
-        if (!empty($todo->pre_command)) {
+        // Run pre-command if set (skip for autonomous auto-generated messages)
+        if (!$isAutonomousMessage && !empty($todo->pre_command)) {
             $this->broadcast($todo->id, 'pre_command_start', [
                 'command' => $todo->pre_command,
             ]);
@@ -204,7 +211,7 @@ class WebSocketStreamService
                 $this->broadcast($todo->id, 'error', [
                     'message' => 'Pre-command failed: ' . ($preResult['error'] ?: $preResult['output']),
                 ]);
-                return;
+                return '';
             }
         }
 
@@ -252,6 +259,22 @@ class WebSocketStreamService
             'WebFetch', 'WebSearch', 'Task', 'TodoRead', 'TodoWrite',
         ]);
 
+        // Set system prompt
+        $systemPrompt = $this->buildSystemPrompt($todo);
+        if (!empty($systemPrompt)) {
+            $executor->setSystemPrompt($systemPrompt);
+        }
+
+        // Resume from previous session if available
+        $previousSession = ClaudeSession::getLatestResumableForTodo($todo->id);
+        if ($previousSession && $previousSession->claude_session_id) {
+            Log::info('[WebSocket] Resuming from previous session', [
+                'todo_id' => $todo->id,
+                'claude_session_id' => $previousSession->claude_session_id,
+            ]);
+            $executor->setResumeSession($previousSession->claude_session_id);
+        }
+
         try {
             $eventCount = 0;
             foreach ($executor->execute($workingDirectory, $processedContent, $session, $todo->model ?? 'sonnet', $images) as $event) {
@@ -291,7 +314,8 @@ class WebSocketStreamService
                     'message' => $assistantMessage->fresh()->toArray(),
                 ]);
 
-                if ($todo->fresh()->status === 'running') {
+                // Skip auto-completing for autonomous tasks — the job loop manages status
+                if (!$todo->isAutonomous() && $todo->fresh()->status === 'running') {
                     $todo->markAsCompleted();
                 }
             }
@@ -312,8 +336,8 @@ class WebSocketStreamService
             ]);
         }
 
-        // Run post-command if set and streaming succeeded (not cancelled)
-        if ($success && !$cancelled && !empty($todo->post_command)) {
+        // Run post-command if set and streaming succeeded (not cancelled, not autonomous auto-message)
+        if ($success && !$cancelled && !$isAutonomousMessage && !empty($todo->post_command)) {
             $this->broadcast($todo->id, 'post_command_start', [
                 'command' => $todo->post_command,
             ]);
@@ -325,6 +349,8 @@ class WebSocketStreamService
 
             $this->broadcast($todo->id, 'post_command_result', $postResult ?? []);
         }
+
+        return $fullContent;
     }
 
     /**
@@ -468,5 +494,51 @@ class WebSocketStreamService
         }
 
         return $content;
+    }
+
+    /**
+     * Build a system prompt with project context for Claude.
+     */
+    private function buildSystemPrompt(Todo $todo): ?string
+    {
+        $parts = [];
+
+        $parts[] = "You are working on a task: \"{$todo->title}\"";
+
+        if ($todo->worktree) {
+            $parts[] = "Working directory: {$todo->worktree->path}";
+            if ($todo->worktree->branch) {
+                $parts[] = "Git branch: {$todo->worktree->branch}";
+            }
+        }
+
+        if (!empty($todo->context)) {
+            $parts[] = "\nTask context:\n{$todo->context}";
+        }
+
+        $parts[] = "\nYou have full access to the project files in this directory. You can read, search, and modify files as needed to complete the task.";
+
+        $parts[] = "\nIMPORTANT SAFETY RULES:
+- NEVER run destructive database commands like: migrate:fresh, migrate:reset, db:wipe, DROP TABLE, DROP DATABASE
+- NEVER delete .env files or modify database credentials
+- NEVER run 'rm -rf' on directories without explicit user confirmation
+- When running tests, use --no-coverage unless specifically requested
+- Ask for confirmation before any potentially destructive operation";
+
+        // Autonomous mode instructions
+        if ($todo->isAutonomous()) {
+            $phase = $todo->autonomous_phase ?? 'working';
+            if ($phase === 'qa') {
+                $parts[] = "\nQA REVIEW MODE: Review all changes you made. Check requirements, code quality, edge cases, tests.
+If everything passes, include [QA_PASSED] on its own line.
+If issues found, describe them (do NOT include [QA_PASSED]).";
+            } else {
+                $parts[] = "\nAUTONOMOUS MODE: Work on the task until fully complete. Do NOT stop to ask for confirmation.
+When FULLY COMPLETE, end your response with [TASK_COMPLETE] on its own line.
+Do NOT use [TASK_COMPLETE] unless everything is done.";
+            }
+        }
+
+        return implode("\n", $parts);
     }
 }

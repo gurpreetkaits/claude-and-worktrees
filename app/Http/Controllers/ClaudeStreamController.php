@@ -34,6 +34,11 @@ class ClaudeStreamController extends Controller
         $message = $request->input('message');
         $images = $request->input('images', []);
 
+        // Initialize autonomous phase on first message
+        if ($todo->isAutonomous() && $todo->autonomous_phase === null) {
+            $todo->setAutonomousPhase('working');
+        }
+
         // Dispatch the streaming job to run in the background
         ProcessClaudeStream::dispatch($todo, $message, $images);
 
